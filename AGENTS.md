@@ -8,9 +8,9 @@ The overarching goal of Simon is to be a seed repository for agentic systems, me
 
 The architecture of Simon follows a continuous loop where an agent percieves its environment, reasons about what it ought to do, takes an action, and sees the result of its action as a reflection of the broader environment. This perceive -> reason -> act loop drives the agent toward its goal. More specifically, the agent's perspective on the world breaks down into a few key abstracted modules:
 
-- Perception: any relevant environmental stimuli to the task, e.g. user messages, environment information, results of previous tool calls, etc.
+- Perception: any relevant environmental stimuli to the task, e.g. user messages, workbenches, environment information, results of previous tool calls, etc.
 - Memory: a built-in memory module allows the agent to store relevant information as editable memories, which automatically resurface using RAG
-- Agency: acts as the agent's innate drive toward a particular goal, for now this represents the agent's to-do list
+- Agency: acts as the agent's innate drive toward a particular goal, THIS IS CURRENTLY NOT IMPLEMENTED as I'm reconsidering its architectural requirement given agent advancement this particular domain
 
 The important note about the environmental perception building is that it is a continuous event, not something that gets triggered by a specific stimuli (like user input). Rather, a user can continuously send messages to the agent, which enter a queue through the environment module, and are pulled from the queue on the next agent iteration. This is meant to stay more true to the continuous aspect of the environment's evolution. So as the environment updates, the program keeps track of this, but the agent perceives this along with the "beat" of its own "conscious" processing.
 
@@ -42,4 +42,4 @@ The goal of comments is to make the code they represent skimable, not to explain
 
 ## Design
 
-The design of simple
+TBD
