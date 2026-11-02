@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from embeddings.embedding import EmbeddingModel, validate_vector
 from embeddings.schema import EMBEDDING_SCHEMA
-from memory.schema import MEMORY_REMOVAL_SCHEMA, MEMORY_SCHEMA
+from memory.schema import MEMORY_MARKDOWN_SCHEMA, MEMORY_REMOVAL_SCHEMA, MEMORY_SCHEMA
 from memory.service import (
     Memory,
     MemoryConflictError,
@@ -57,6 +57,7 @@ class SQLiteMemoryService:
             self.database.migrate(connection, "embeddings:001", EMBEDDING_SCHEMA)
             self.database.migrate(connection, "memory:001", MEMORY_SCHEMA)
             self.database.migrate(connection, "memory:002", MEMORY_REMOVAL_SCHEMA)
+            self.database.migrate(connection, "memory:003", MEMORY_MARKDOWN_SCHEMA)
             connection.execute(
                 "INSERT OR IGNORE INTO embedding_profiles(fingerprint,profile_json,created_at) VALUES (?,?,?)",
                 (
@@ -156,7 +157,9 @@ class SQLiteMemoryService:
         except Exception as error:
             raise MemoryServiceError(f"Memory embedding failed: {error}") from error
 
-    def add(self, draft: MemoryDraft) -> Memory:
+    def add(
+        self, draft: MemoryDraft, *, markdown_origin: tuple[int, str, str] | None = None
+    ) -> Memory:
         self._check(draft.namespace)
         text = f"# {draft.title}\n\n{draft.content}"
         vector = self._embed(text)  # Remote work precedes the writer transaction.
@@ -192,7 +195,21 @@ class SQLiteMemoryService:
                 f"INSERT INTO {self._table}(rowid,embedding) VALUES (?,?)",
                 (embedding_id, json.dumps(vector)),
             )
+            if markdown_origin is not None:
+                root_id, path, file_hash = markdown_origin
+                connection.execute(
+                    "INSERT INTO memory_markdown_sync(root_id,memory_id,path,file_hash,memory_hash) VALUES (?,?,?,?,'')",
+                    (root_id, memory_id, path, file_hash),
+                )
         return Memory(id=memory_id, **asdict(draft), created_at=now, updated_at=now)
+
+    def all_memories(self) -> list[Memory]:
+        self._check("default")
+        with self._connect() as connection:
+            return [
+                self._memory(row)
+                for row in connection.execute("SELECT * FROM memories ORDER BY id")
+            ]
 
     @staticmethod
     def _memory(row: sqlite3.Row) -> Memory:
@@ -243,9 +260,18 @@ class SQLiteMemoryService:
         return self._memory(row)
 
     def update(
-        self, memory_id: int | str, changes: MemoryUpdate, namespace: str = "default"
+        self,
+        memory_id: int | str,
+        changes: MemoryUpdate,
+        namespace: str = "default",
+        *,
+        expected: Memory | None = None,
     ) -> Memory:
         original = self.get(memory_id, namespace)
+        if expected is not None and original != expected:
+            raise MemoryConflictError(
+                f"Memory {original.id} changed during synchronization"
+            )
         if original.removed_at is not None:
             raise MemoryServiceError(
                 f"Memory {original.id} has been removed and cannot be updated"
@@ -272,12 +298,13 @@ class SQLiteMemoryService:
                 )
             now = self._now()
             connection.execute(
-                "UPDATE memories SET title=?,content=?,type=?,importance=?,updated_at=? WHERE id=?",
+                "UPDATE memories SET title=?,content=?,type=?,importance=?,metadata_json=?,updated_at=? WHERE id=?",
                 (
                     draft.title,
                     draft.content,
                     draft.type,
                     draft.importance,
+                    json.dumps(draft.metadata, allow_nan=False),
                     now,
                     original.id,
                 ),
@@ -324,7 +351,13 @@ class SQLiteMemoryService:
             updated_at=now,
         )
 
-    def remove(self, memory_id: int | str, namespace: str = "default") -> Memory:
+    def remove(
+        self,
+        memory_id: int | str,
+        namespace: str = "default",
+        *,
+        expected: Memory | None = None,
+    ) -> Memory:
         self._check(namespace)
         memory_id = self._memory_id(memory_id)
         with self._connect() as connection:
@@ -339,6 +372,10 @@ class SQLiteMemoryService:
                     f"Memory {memory_id} was not found; use an ID from recall"
                 )
             original = self._memory(row)
+            if expected is not None and original != expected:
+                raise MemoryConflictError(
+                    f"Memory {original.id} changed during synchronization"
+                )
             if original.removed_at is not None:
                 return original
             embeddings = connection.execute(

@@ -1,5 +1,7 @@
 # Simple Agent
 
+See the [changelog](CHANGELOG.md) for notable changes and migration notes.
+
 > [!warning]
 > Simple agent can run commands on your machine. Be aware of the potential for it to make modifications to your system.
 
@@ -22,7 +24,18 @@ So put simply, the agent works on a constant loop, involving three main steps:
 2. Inference
 3. Action
 
-The perception stage combines environmental analysis, session-local workspace views (tasks and a notepad), and memory recall. The inference stage is the call to the model API, where the model is given the perception to reason about. The action stage is where the agent takes the output of the model, such as tool calls, and actually runs them.
+The perception stage combines environmental analysis, session-local workbench views (tasks and a notepad), and memory recall. The inference stage is the call to the model API, where the model is given the perception to reason about. The action stage is where the agent takes the output of the model, such as tool calls, and actually runs them.
+
+## Architecture
+
+The organization separates agent behavior from application wiring:
+
+- `agent/` owns lifecycle and control: the perception → inference → action loop, environment updates, waiting/resuming, and tool orchestration. `agent/tokens.py` keeps a trailing context window within configured model/input boundaries without compaction; see [context and cost policies](documentation/llm-adapters.md).
+- `workbenches/` owns session-local tasks and notepad state, tools, and perception views. See the [workbench interface](workbenches/workbenches.md).
+- `memory/` owns durable memory. `memory/engine.py` owns recall, prompt formatting, and memory tools; service contracts and backends live alongside it.
+- `roles/` defines role identities, prompt guidance, and tool selections. `tools/` defines shared tool contracts, registration, execution policies, and capability libraries.
+- `application/` assembles the runtime and owns its CLI-facing concerns and shared event transport (`application/events.py`). `application/cli.py` contains the existing CLI implementation and runtime wiring; the root `simple-agent.py` is a thin launcher that uses `runpy` to execute `application.cli`. `application/config.py` loads configuration; `application/terminal.py`, `application/cli_input.py`, and `application/runlog.py` provide presentation, interactive input/approval, and session logging.
+- `llms/`, `embeddings/`, and `storage/` remain unchanged: chat-provider adapters, independent embedding adapters, and shared database lifecycle/migrations, respectively.
 
 ## Prerequisites
 
@@ -41,13 +54,13 @@ Use uv to install dependencies and run the agent. It manages Python 3.12 and the
 1. Start by cloning the repository (or forking if you want to extend it a lot):
 
 ```bash
-   git clone https://github.com/AidanTilgner/Simple-Agent.git
+   git clone https://github.com/AidanTilgner/Simon.git
 ```
 
 2. Then, navigate into the directory:
 
 ```bash
-cd Simple-Agent
+cd Simon
 ```
 
 3. Install the dependencies:
@@ -85,7 +98,7 @@ for accounting behavior and migration from `MAX_TOKENS` / `MAX_MESSAGE_LENGTH`.
 5. Run the program (no environment activation needed):
 
 ```bash
-uv run python simple-agent.py
+uv run python simon.py
 ```
 
 6. To exit the program, you can use `Ctrl+C`, or type "exit".
@@ -93,7 +106,7 @@ uv run python simple-agent.py
 That's it! You should see the agent start up, and you can ask it to do things using it's tools.
 
 Select a different file with `--config path/to/config.toml`. After syncing
-dependencies, `uv run --no-sync python simple-agent.py` skips uv's environment
+dependencies, `uv run --no-sync python simon.py` skips uv's environment
 reconciliation on subsequent launches. This also avoids repeated reinstall noise
 from the current `sqlite-vss` wheel metadata mismatch.
 
@@ -119,7 +132,7 @@ uv run python -m unittest discover -s tests -v
 
 ### Logs
 
-The CLI prints the logging directory at startup (default `simple-agent-logs/`).
+The CLI prints the logging directory at startup (default `simon-logs/`).
 `last_thread.md` contains the conversation, `toolbox.log` records tool arguments
 and results, `agent.log` contains history snapshots, and `errors.log` records
 failures. `usage.jsonl` records every inference attempt and `events.jsonl` traces
@@ -131,7 +144,7 @@ for completion diagnostics and bounded output-limit recovery settings.
 You might want to extend or enhance the functionality of the tool, and if you do I'd love to hear how it goes! Or even submit a PR if you think it should be a default.
 
 **Modifying Prompts**
-You can modify prompts in `agent/agent.py`, `agent/memory.py`, `agent/environment.py`, and the workspace modules under `agent/workspaces/`. See the [workspace interface](agent/workspaces/workspaces.md) for session-local tools and views. These files are where you'll find the actual programmatic generation logic for several aspects of the prompt. Things might change over time, so I'm not going to go into specifics here. But you might find that you can gain further behavior by modifying these files.
+You can modify prompts in `agent/agent.py`, `memory/engine.py`, `agent/environment.py`, and the workbench modules under `workbenches/`. See the [workbench interface](workbenches/workbenches.md) for session-local tools and views. These files are where you'll find the actual programmatic generation logic for several aspects of the prompt. Things might change over time, so I'm not going to go into specifics here. But you might find that you can gain further behavior by modifying these files.
 
 The `system_prompt.md` file is the source of the agent's system prompt, which can be modified as well.
 
@@ -167,7 +180,7 @@ Roles focus working practices rather than enforcing permissions, and the agent c
 
 Check out [the tutorial](/documentation/adding-memory.md) to learn how to add memory to Simple Agent. This isn't necessary for the agent to work, however allows its memory to persist between sessions.
 
-Built-in memory runs in-process using the shared application SQLite database and OpenAI embeddings. Set `MEMORY_BACKEND=local` and `OPENAI_API_KEY` in `.env` to enable it. Embedding providers are independent of chat models, and custom memory services implement the same interface as the built-in service. Existing Simple Vector Store configurations remain supported.
+Built-in memory runs in-process using the shared application SQLite database and OpenAI embeddings. Set `[memory] backend = "local"` and the OpenAI key in `config.toml` to enable it. Add `directory = "memories"` under `[memory]` for an editable Markdown view: startup imports file edits, agent writes are mirrored, and `uv run simple-agent.py --sync-memory` synchronizes manually without starting chat. Embedding providers are independent of chat models. Custom memory integrations implement the same `MemoryService` interface and register their own factory.
 
 ## Roadmap
 
@@ -177,8 +190,8 @@ I'm looking to polish this project into a really solid framework for building ag
 
 **Existing Features**
 
-- [x] Implement memory and learning through [Simple Vector Store](https://github.com/AidanTilgner/Simple-Vector-Store)
 - [x] Built-in SQLite memory with independent embedding adapters and a standard memory service interface
+- [x] Editable Markdown memory directory with startup/manual synchronization and agent-write mirroring
 - [x] Allow selection of additional models
 - [x] Get better editing
 - [x] "Modes" that the agent can switch into for specialized operations, with different tool layouts
@@ -186,7 +199,7 @@ I'm looking to polish this project into a really solid framework for building ag
 **WIP (kinda) Features**
 These are things that I currently plan on doing or hope to do. If you have ideas for features or feadback, don't hesitate to open an issue so we can discuss it.
 
-- [ ] Memory import/export and embedding-model migration utilities ([plan](discussions/built-in-memory.md))
+- [ ] Embedding-model migration, memory restoration, and directory watching ([plan](discussions/built-in-memory.md))
 - [ ] A more robust benchmarking system through [Benchy](https://github.com/AidanTilgner/Benchy)
 - [ ] A type of procedural memory
 - [ ] A sort of plugin system

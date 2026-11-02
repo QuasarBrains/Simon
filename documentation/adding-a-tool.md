@@ -3,7 +3,7 @@
 General-purpose tools are discrete functions grouped into capability libraries under `tools/libraries/`.
 A stateless library exports a `TOOLS` list; roles compose those lists or select individual tools.
 Core agent modules can own their instance-bound tools directly. For example,
-`agent/memory.py` exposes `MemoryEngine.get_tools()` for harness registration,
+`memory/engine.py` exposes `MemoryEngine.get_tools()` for harness registration,
 using the same `Tool`, `ToolResult`, and execution policies as library tools.
 There is no tool inheritance hierarchy. See [the capability inventory](tooling.md).
 

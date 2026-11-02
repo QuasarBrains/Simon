@@ -4,8 +4,9 @@ from typing import List, Optional
 
 import tiktoken
 
+from application.events import PubSub
+from application.terminal import console
 from llms.llm import LLM, Message
-from memory.legacy import VectorStoreMemoryService
 from memory.service import (
     EditableMemoryService,
     Memory,
@@ -15,18 +16,15 @@ from memory.service import (
     MemoryServiceError,
     MemoryUpdate,
     RemovableMemoryService,
+    SynchronizableMemoryService,
 )
-from memory.vector_store import VectorStore
 from tools.index import ExecutionPolicy, Tool, ToolResult
-from utils.pubsub import PubSub
-from utils.terminal import console
 
 
 class MemoryEngine:
     def __init__(
         self,
         pubsub: PubSub,
-        vector_store: Optional[VectorStore] = None,
         llm: Optional[LLM] = None,
         *,
         service: Optional[MemoryService] = None,
@@ -34,12 +32,8 @@ class MemoryEngine:
         token_budget: int = 1000,
     ) -> None:
         self.pubsub = pubsub
-        self.vector_store = vector_store
         self.llm = llm
         self.service = service
-        if service is None and vector_store is not None:
-            self.service = VectorStoreMemoryService(vector_store)
-            self.service.startup()
         if not 1 <= recall_limit <= 100 or token_budget <= 0:
             raise ValueError(
                 "Memory recall limit must be 1..100 and token budget must be positive"
@@ -104,6 +98,11 @@ class MemoryEngine:
                 "This backend cannot remove memories; memory.remove is unavailable. "
             )
         status += "The latest Memory section supersedes older recalled copies in conversation history.\n\n"
+        if (
+            isinstance(self.service, SynchronizableMemoryService)
+            and self.service.last_sync_report.pending
+        ):
+            status += "Markdown synchronization needs attention; saved SQLite records remain available for recall.\n"
         if self.recall_failed:
             return (
                 status
@@ -232,6 +231,21 @@ class MemoryEngine:
             },
         }
 
+    def _write_result(self, memory: Memory, content: str) -> ToolResult:
+        metadata = {"memory_id": str(memory.id)}
+        if memory.removed_at is not None:
+            metadata["removed_at"] = memory.removed_at
+        if isinstance(self.service, SynchronizableMemoryService):
+            report = self.service.last_sync_report
+            metadata.update(
+                markdown_sync_pending=report.pending,
+                markdown_sync_summary=report.summary(),
+            )
+            if report.pending:
+                details = "; ".join((report.conflicts + report.errors)[:3])
+                content += f"\nSaved in SQLite; Markdown synchronization needs attention: {details}"
+        return ToolResult(content=content, metadata=metadata)
+
     def add_memory_tool(self) -> Tool:
         def run(arguments, pubsub):
             result = self.add_memory(
@@ -242,10 +256,7 @@ class MemoryEngine:
                     importance=arguments.get("importance", "medium"),
                 )
             )
-            return ToolResult(
-                content=f"Memory added: {result.title}",
-                metadata={"memory_id": str(result.id)},
-            )
+            return self._write_result(result, f"Memory added: {result.title}")
 
         fields = self._tool_fields()
         fields["type"]["default"] = "semantic"
@@ -274,9 +285,9 @@ class MemoryEngine:
                 **{key: value for key, value in arguments.items() if key != "memory_id"}
             )
             result = self.update_memory(arguments["memory_id"], changes)
-            return ToolResult(
-                content=f"Memory updated: {result.title}\nCurrent content: {result.content}",
-                metadata={"memory_id": str(result.id)},
+            return self._write_result(
+                result,
+                f"Memory updated: {result.title}\nCurrent content: {result.content}",
             )
 
         fields = self._tool_fields()
@@ -312,9 +323,9 @@ class MemoryEngine:
     def remove_memory_tool(self) -> Tool:
         def run(arguments, pubsub):
             result = self.remove_memory(arguments["memory_id"])
-            return ToolResult(
-                content=f"Memory removed from automatic recall: {result.title}. Its record is retained for recovery.",
-                metadata={"memory_id": str(result.id), "removed_at": result.removed_at},
+            return self._write_result(
+                result,
+                f"Memory removed from automatic recall: {result.title}. Its record is retained for recovery.",
             )
 
         return Tool(

@@ -1,6 +1,6 @@
 import threading
 
-from utils.pubsub import PubSub
+from application.events import PubSub
 
 
 class Environment:

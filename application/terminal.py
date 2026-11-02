@@ -3,8 +3,8 @@
 import asyncio
 import json
 from contextlib import contextmanager
-from decimal import Decimal
 
+from application.lib.formatting import dollars
 from prompt_toolkit import HTML, PromptSession
 from prompt_toolkit.validation import Validator
 from rich.console import Console
@@ -14,13 +14,6 @@ from rich.rule import Rule
 from rich.text import Text
 
 console = Console(highlight=False)
-
-
-def dollars(value: str) -> str:
-    amount = Decimal(value)
-    if 0 < amount < Decimal("0.0001"):
-        return "<$0.0001"
-    return f"${amount:,.4f}"
 
 
 class Terminal:

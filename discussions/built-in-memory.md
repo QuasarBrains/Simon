@@ -1,32 +1,30 @@
 # Built-in, extensible memory
 
-Status: built-in add/search, partial updates, and approval-gated soft removal are available. Shared SQLite storage, standalone OpenAI embedding adapters, and the standard memory service interface are implemented. Perception reports actual memory capabilities, recalls records with explicit IDs, and exposes tools according to backend support. Model migration and editable Markdown synchronization remain follow-up work. See the [memory tutorial](../documentation/adding-memory.md) for current setup and extension instructions; the design below records the architecture and future direction.
+Status: built-in add/search, partial updates, approval-gated soft removal, and optional editable Markdown synchronization are available. Shared SQLite storage, standalone OpenAI embedding adapters, and the standard memory service interface are implemented. Perception reports actual memory capabilities, recalls records with explicit IDs, and exposes tools according to backend support. Model migration, restoration, and directory watching remain follow-up work. See the [memory tutorial](../documentation/adding-memory.md) for current setup and extension instructions; the design below records the architecture and future direction.
 
 ## Motivation
 
-Simple Vector Store (SVS) works well for memory, but running and configuring two projects adds setup and maintenance time. Simple Agent should own a dedicated memory module that runs in-process, while retaining small, explicit interfaces for extensions.
+The original external vector-store setup worked well for memory, but running and configuring two projects added setup and maintenance time. Simple Agent owns a dedicated memory module that runs in-process, with a small service contract for custom integrations.
 
 The goal is a single Simple Agent setup with persistent, useful recall. Preserve what works about current memory before introducing more sophisticated memory behavior.
 
 ## Current integration
 
-- `agent/memory.py` is the core memory module, owning recall, prompt formatting, domain operations, and the `memory.add`, `memory.update`, and approval-gated `memory.remove` tools. The harness registers `MemoryEngine.get_tools()` directly using the shared tooling interface. The agent recalls memories before inference using current environment text.
-- `memory/vector_store.py` defines a `Record` and a callable-based `VectorStore` wrapper. This is already an extension boundary, but only covers adding and searching.
-- `memory/simple_vector_store.py` calls the SVS HTTP API to search, build, and sync a store. It also reads and writes Markdown files directly in the configured source directory.
-- Adding a memory writes a title-named file and triggers synchronization. Search requests up to three records with a distance threshold of `0.4`.
-- `simple-agent.py` selects and starts the backend through `VECTOR_STORE_CHOICE_MAP`. Memory currently defaults to disabled.
-- The sibling SVS project has replaceable embedding providers and SQLite-based vector storage using native SQLite extensions. Its returned distance is lower-is-better; the agent currently puts that distance in a field named `similarity`.
-
-The dependency is both an HTTP service and a shared-filesystem convention. Replacing just the HTTP calls would leave much of the operational coupling in place.
+- `memory/engine.py` is the core memory module, owning recall, prompt formatting, domain operations, and the `memory.add`, `memory.update`, and approval-gated `memory.remove` tools. The harness registers `MemoryEngine.get_tools()` directly using the shared tooling interface. The agent recalls memories before inference using current environment text.
+- `memory/service.py` defines the memory domain types and the service contract used directly by the engine.
+- `memory/sqlite.py` implements the built-in backend; `memory/markdown.py` adds optional directory synchronization.
+- `memory/config.py` selects the built-in `local` service or a registered custom factory; `none` disables memory.
+- `application/cli.py` owns backend selection and startup wiring; the root `simon.py` is a thin launcher that uses `runpy` to execute `application.cli`. Memory currently defaults to disabled.
+- Embedding providers are configured independently under `embeddings/`; the local backend returns explicitly labeled squared-L2 distances.
 
 ## Recommended first release
 
-1. Persistent memory inside Simple Agent, with no SVS checkout, server, or shared directory required.
+1. Persistent memory inside Simple Agent, with no external vector-store checkout or server required.
 2. A shared application SQLite database, with a memory table and corresponding vector virtual table using the `sqlite-vss` pattern. Memory is one consumer of application storage, not the owner of a memory-only database.
 3. A standalone `embeddings/` adapter module, patterned after `llms/`. Start with OpenAI using the existing SDK; providers remain independent of chat-model selection and memory storage.
 4. Existing semantic/episodic memory types, importance levels, explicit `memory.add` tool, and recall before inference.
 5. Persist embedding provenance and compatibility metadata from the start, so compatible vectors remain searchable and a model migration utility can be added later.
-6. A documented service contract implemented by built-in memory and available to custom adapters. Keep the existing SVS option during transition.
+6. A documented service contract implemented directly by built-in memory and custom adapters, without compatibility layers.
 
 Built-in storage removes the second service. The initial hosted embedding provider still needs network access and credentials; fully offline embeddings are a separate provider option to prioritize if required.
 
@@ -57,20 +55,20 @@ embeddings/embedding.py   shared adapter interface and metadata/result types
 embeddings/openai.py      initial provider implementation
 memory/service.py         Memory, SearchResult, MemoryService contract
 memory/sqlite.py          built-in memory service
-agent/memory.py           recall, domain operations, and core memory Tool/ToolResult definitions
+memory/engine.py          recall, domain operations, and core memory Tool/ToolResult definitions
 ```
 
 Other modules can add their own tables and consume `embeddings/` without depending on the memory module. Share storage infrastructure and embedding metadata conventions, not a generic table that forces all application data into the memory schema.
 
 ### Domain model
 
-Introduce a `Memory` model rather than expanding the generic `Record` indefinitely:
+The domain-specific `Memory` model contains:
 
 - Stable ID independent of title; an integer primary key fits SQLite/vector row IDs. Custom services may expose opaque string IDs; duplicate titles must not overwrite memories.
 - Title, content, type (`semantic` or `episodic`), and validated importance (`low`, `medium`, `high`, `extreme`).
 - UTC creation/modification timestamps.
 - Namespace, initially with one default, so projects or agents can share storage without mixing recall.
-- Optional provenance and extensible metadata, including import path and legacy ID when available.
+- Optional provenance and extensible metadata.
 
 Keep retrieval information in `SearchResult(memory, distance, metric)` rather than in stored memory. The initial VSS implementation uses squared L2 distance, lower-is-better; make that explicit rather than calling it similarity. Custom services must declare their score semantics, and thresholds must not be transferred between metrics or embedding profiles. The agent consumes ordered results without depending on storage-specific SQL or scores.
 
@@ -113,34 +111,36 @@ Persistence/search should work without a chat LLM instance. Tools may be exposed
 
 ## Persistence and operational behavior
 
-SQLite is the application source of truth under an ignored data directory, for example `datastore/simple-agent.sqlite3`. A shared storage module owns connection policy and schema migrations; memory owns its tables and queries. Other modules can add tables through the same migration mechanism. Markdown will be an editable, synchronized view of memory, preserving the directory-based inspection and editing workflow of SVS.
+SQLite is the application source of truth under an ignored data directory, for example `datastore/simon.sqlite3`. A shared storage module owns connection policy and schema migrations; memory owns its tables and queries. Other modules can add tables through the same migration mechanism. Markdown is an optional editable, synchronized view for directory-based inspection and editing.
 
-### Planned Markdown synchronization
+### Markdown synchronization
 
-Preserving directory-based memory editing is an agreed requirement; the current built-in service does not implement synchronization yet.
+Directory-based memory editing is implemented in `memory/markdown.py`, wrapping the local SQLite service when `[memory] directory` is configured. Startup and `--sync-memory` reconcile the directory; agent writes mirror the affected record. `memory_sync_roots` and `memory_markdown_sync` retain directory identity and synchronization hashes in SQLite.
 
 - Store stable memory IDs, type, and importance in frontmatter, with readable title/content in the body. File renames retain record identity.
 - Write Markdown files for agent-created memories. Import new files and apply file edits to the corresponding SQLite records, re-embedding only when embedded text changes.
 - Initially synchronize at startup and through an explicit sync command. Automatic directory watching can follow later.
 - Track the last synchronized file/database versions. Detect concurrent edits and preserve both versions instead of silently overwriting either.
-- Distinguish deliberate file deletion from an unavailable directory before deleting persistent memory. Finalize deletion semantics before implementation.
+- Missing tracked files soft-remove unchanged memories only when the directory marker is intact and the scan is complete. Database changes turn deletion into a conflict; missing directories/markers cause no removal.
 - Keep synchronization inside the built-in implementation; custom memory services still follow the same small public service contract.
 
 This is a supported editing interface, not merely one-way export. SQLite remains the operational authority for records, embeddings, and synchronization state.
+
+Conflicting source files are preserved with database snapshots under `.memory-conflicts/`. Removals retain tombstones and cannot be undone by stale files. Failed mirroring is reported as pending synchronization after a successful database write. See the tutorial for configuration and conflict handling.
 
 ### Initial schema sketch
 
 This is a logical schema proposal, not an executable migration. Keep ordinary relational data in ordinary tables; `vss0` virtual tables contain vectors and link back by integer row ID.
 
-| Table | Main fields / purpose |
-| --- | --- |
-| `schema_migrations` | Applied application migration versions and timestamps. |
-| `memories` | `id INTEGER PRIMARY KEY`, `namespace`, `title`, `content`, `type`, `importance`, `created_at`, `updated_at`, optional `metadata_json`. Validate type/importance using constraints as well as service input validation. |
-| `embedding_profiles` | `id`, unique compatibility fingerprint, provider/model/revision, dimensions, options/task configuration, input-format version, normalization policy, adapter version, creation time. Shared metadata convention available to other modules. |
-| `memory_embedding_indexes` | `id INTEGER PRIMARY KEY`, `profile_id` (unique foreign key), internally generated unique virtual-table name, index implementation/version, distance metric. Each index belongs to exactly one compatibility profile. |
-| `memory_embeddings` | `id INTEGER PRIMARY KEY`, `memory_id` foreign key, `profile_id` foreign key, hash of embedded input, generation timestamp, generation adapter version. Unique `(memory_id, profile_id)` for the initial one-vector-per-memory design. |
-| `memory_settings` | Singleton active embedding profile reference for the initial module. |
-| `vss_memory_<profile_id>` | `vss0(embedding(<dimensions>))`; vector row ID equals `memory_embeddings.id`. |
+| Table                      | Main fields / purpose                                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema_migrations`        | Applied application migration versions and timestamps.                                                                                                                                                                                      |
+| `memories`                 | `id INTEGER PRIMARY KEY`, `namespace`, `title`, `content`, `type`, `importance`, `created_at`, `updated_at`, optional `metadata_json`. Validate type/importance using constraints as well as service input validation.                      |
+| `embedding_profiles`       | `id`, unique compatibility fingerprint, provider/model/revision, dimensions, options/task configuration, input-format version, normalization policy, adapter version, creation time. Shared metadata convention available to other modules. |
+| `memory_embedding_indexes` | `id INTEGER PRIMARY KEY`, `profile_id` (unique foreign key), internally generated unique virtual-table name, index implementation/version, distance metric. Each index belongs to exactly one compatibility profile.                        |
+| `memory_embeddings`        | `id INTEGER PRIMARY KEY`, `memory_id` foreign key, `profile_id` foreign key, hash of embedded input, generation timestamp, generation adapter version. Unique `(memory_id, profile_id)` for the initial one-vector-per-memory design.       |
+| `memory_settings`          | Singleton active embedding profile reference for the initial module.                                                                                                                                                                        |
+| `vss_memory_<profile_id>`  | `vss0(embedding(<dimensions>))`; vector row ID equals `memory_embeddings.id`.                                                                                                                                                               |
 
 For a first OpenAI profile using 1536 dimensions, the vector DDL has this shape:
 
@@ -166,13 +166,14 @@ Use the default exhaustive VSS index initially; avoid index-training/tuning opti
 
 An explicitly selected but misconfigured service should produce an actionable startup error. Transient recall failure should publish an error and let the turn proceed without recalled memory. Failed writes must be reported as failures. Disabled memory initializes neither memory indexes nor an embedding client; the application database may still be needed by other modules. Lazy-load optional adapters/providers.
 
-## Configuration and compatibility
+## Configuration
 
-Proposed names, not implemented yet:
+Memory configuration options are exposed in `config.toml` and through environment overrides:
 
 ```dotenv
-MEMORY_BACKEND=local                 # local | simple_vector_store | none
-DATABASE_PATH=datastore/simple-agent.sqlite3
+MEMORY_BACKEND=local                 # local | none | registered custom backend
+DATABASE_PATH=datastore/simon.sqlite3
+MEMORY_DIRECTORY=memories
 MEMORY_NAMESPACE=default
 EMBEDDING_PROVIDER=openai
 EMBEDDING_MODEL=text-embedding-3-small
@@ -182,25 +183,13 @@ MEMORY_CONTEXT_TOKEN_BUDGET=1000
 
 Resolve relative paths against a documented stable base such as the project root. Add a relevance setting only with documented backend-specific semantics and an evaluated default.
 
-During transition, `MEMORY_BACKEND` takes precedence; if absent, honor `VECTOR_STORE_CHOICE` and existing SVS settings. Reject unknown explicit choices rather than silently disabling memory. Initially retain disabled memory when neither setting is present. Whether new installations should enable local memory automatically remains a product decision, especially when embeddings need a separate credential.
-
-Provide a compatibility adapter for current `VectorStore` integrations and document its retirement window. Keep current memory tool arguments compatible while changing internal types.
+Memory is disabled when no backend is selected. `local` uses the built-in service; custom names select factories registered in `MEMORY_FACTORIES`. Unknown explicit choices produce an error. The engine depends directly on `MemoryService`, with no intermediate vector-store abstraction.
 
 ## Future migration utilities
 
 Persist profile metadata and content hashes in the first release; build model-switching utilities later. Such a utility embeds existing content into a new profile/index, resumes by checking hashes, verifies complete coverage, and only then switches the active profile. Keep old vectors available until cutover succeeds. Do not merge rankings from different profiles as if their distances were interchangeable.
 
-Existing SVS Markdown import is follow-up work alongside the planned editable-directory synchronization:
-
-1. Read the existing configured SVS memory directory directly. Import should not require the SVS server or its native database extensions.
-2. Parse frontmatter safely, preserving importance, memory type, title, and body. Handle the heading generated by the current writer without duplicating it. Report missing/invalid metadata rather than silently inventing semantics.
-3. Offer a dry run with counts and per-file issues. Import only the chosen memory directory, not an arbitrary SVS knowledge collection.
-4. Retain an import key based on source identity/path and a content hash. Repeated imports skip unchanged files; changed files update their original imported memory under an explicit policy.
-5. Generate destination IDs and recompute embeddings using the destination provider. Copy vectors only if their full compatibility fingerprint can be verified.
-6. Commit each memory atomically, report progress/failures, and resume interrupted imports without duplicates.
-7. Compare counts, metadata, bodies, and representative queries before switching backends. Keep source files intact for rollback.
-
-Switching back to SVS does not automatically include memories created locally after cutover; document export/re-import for that case. Export uses IDs for filenames and proper frontmatter serialization so titles cannot become filesystem paths.
+Markdown import/export uses the directory synchronizer, stable IDs, and per-file error reporting. Future migration utilities should build on these domain records and embedding profiles rather than reintroducing backend-specific compatibility layers.
 
 ## Delivery phases
 
@@ -209,7 +198,7 @@ Switching back to SVS does not automatically include memories created locally af
 - Define the public memory service and standalone embedding adapter contracts.
 - Confirm shared application storage ownership and the memory/profile/vector schema.
 - Capture representative recall queries and expected useful memories from the current setup. Compare relevance rather than assuming identical ordering across configurations.
-- Establish configuration precedence and the compatibility wrapper.
+- Establish configuration precedence and direct service injection.
 
 Done when backend/provider choices are independent of the agent loop and the quality baseline is recorded.
 
@@ -219,7 +208,7 @@ Done when backend/provider choices are independent of the agent loop and the qua
 - Add lifecycle, threading behavior, and embedding fingerprint checks.
 - Verify restart persistence, duplicate-title isolation, profile isolation (including same-dimension incompatible models), failed-write atomicity, row-ID joins, and distance ordering with deterministic test vectors.
 
-Done when storage operates independently of the agent and SVS, with no live embedding API required for automated tests.
+Done when storage operates independently of the agent, with no live embedding API required for automated tests.
 
 ### 3. Agent integration
 
@@ -227,7 +216,7 @@ Done when storage operates independently of the agent and SVS, with no live embe
 - Preserve the add tool and recall timing; add bounded formatting and instance-owned state.
 - Verify disabled startup, empty/failed recall clearing, configuration/provider failures, and use from the actual agent thread.
 
-Done when a fresh Simple Agent setup can add a memory, restart, and recall it without SVS running.
+Done when a fresh Simple Agent setup can add a memory, restart, and recall it without a second service.
 
 ### 4. Document and establish the pattern
 
@@ -235,13 +224,13 @@ Done when a fresh Simple Agent setup can add a memory, restart, and recall it wi
 - Run the recall baseline and measure latency across representative collection sizes.
 - Update `.env.example`, the memory tutorial, and README with shared database setup, provider selection, and extension instructions.
 
-Done when built-in memory and a custom service follow the same pattern, with clear extension instructions. Import/export and embedding migration tooling follow separately.
+Done when built-in memory and a custom service follow the same pattern, with clear extension instructions. Embedding migration tooling follows separately.
 
 ## Agreed direction and remaining details
 
 Agreed: shared application SQLite as source of truth; ordinary memory data plus a corresponding vector virtual table; a standalone embedding adapter module with OpenAI first; persisted embedding provenance/compatibility; and one standard memory service contract for built-in and custom implementations. Keep the initial implementation small and add migration utilities later.
 
-Remaining implementation details: validate the vector-extension installation/runtime, finalize the schema sketch and public method signatures, and choose memory activation defaults. Retain the existing SVS option while establishing the new pattern; determine its longer-term support window separately.
+Keep the built-in setup and custom service contract simple. Extend provider support, migration, restoration, and directory watching as separate features rather than adding compatibility paths.
 
 ## Later extensions
 

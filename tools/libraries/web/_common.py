@@ -7,7 +7,7 @@ from jsonschema import Draft202012Validator
 
 from tools.index import ToolResult
 
-USER_AGENT = "Simple-Agent/0.1 (read-only web tools)"
+USER_AGENT = "Simon-Agent/0.1 (read-only web tools)"
 DEFAULT_TIMEOUT = 15
 MAX_REDIRECTS = 5
 MAX_DOWNLOAD_BYTES = 4 * 1024 * 1024

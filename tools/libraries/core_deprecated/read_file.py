@@ -1,7 +1,7 @@
 from typing import Any, Optional
 import fitz  # PyMuPDF
 from tools.index import Tool
-from utils.pubsub import PubSub
+from application.events import PubSub
 
 
 def run(args: Any, ps: PubSub):

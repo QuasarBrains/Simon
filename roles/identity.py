@@ -6,8 +6,8 @@ from llms.llm import LLM
 from roles.config import DEFAULT_ROLE, ROLES_INCLUDED
 from roles.index import Role
 from tools.index import Tool, Toolbox
-from utils.pubsub import PubSub
-from utils.terminal import console
+from application.events import PubSub
+from application.terminal import console
 
 
 class IdentityManager:

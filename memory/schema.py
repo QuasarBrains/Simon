@@ -24,3 +24,16 @@ MEMORY_SCHEMA = (
 )
 
 MEMORY_REMOVAL_SCHEMA = ("ALTER TABLE memories ADD COLUMN removed_at TEXT",)
+
+MEMORY_MARKDOWN_SCHEMA = (
+    """CREATE TABLE memory_sync_roots (
+        id INTEGER PRIMARY KEY, directory TEXT NOT NULL UNIQUE, token TEXT NOT NULL,
+        initialized INTEGER NOT NULL DEFAULT 0
+    )""",
+    """CREATE TABLE memory_markdown_sync (
+        root_id INTEGER NOT NULL REFERENCES memory_sync_roots(id),
+        memory_id INTEGER NOT NULL REFERENCES memories(id),
+        path TEXT, file_hash TEXT, memory_hash TEXT NOT NULL,
+        PRIMARY KEY(root_id, memory_id), UNIQUE(root_id, path)
+    )""",
+)

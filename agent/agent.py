@@ -5,21 +5,20 @@ import traceback
 from typing import List, Optional
 
 from agent.environment import Environment
-from agent.memory import MemoryEngine
-from agent.workspaces.notepad import Notepad
-from agent.workspaces.tasks import Tasks
-from agent.workspaces.workspace import Workspace
+from agent.tokens import TokenControl
+from application.events import PubSub
+from application.terminal import console, terminal
 from llms.costs import BudgetExceeded, PricingUnavailable
 from llms.llm import LLM, LLMError, Message
+from memory.engine import MemoryEngine
 from memory.service import MemoryService
-from memory.vector_store import VectorStore
 from roles.identity import IdentityManager
 from tools.index import Toolbox, ToolResult
 from tools.libraries.interaction import TOOLS as INTERACTION_TOOLS
 from tools.libraries.interaction import WAIT_MODES
-from utils.pubsub import PubSub
-from utils.terminal import console, terminal
-from utils.tokens import get_current_num_tokens
+from workbenches.notepad import Notepad
+from workbenches.tasks import Tasks
+from workbenches.workbench import Workbench
 
 
 class Agent:
@@ -30,8 +29,7 @@ class Agent:
     environment: Environment
     memory: MemoryEngine
     identity: IdentityManager
-    vector_store: Optional[VectorStore]
-    workspaces: list[Workspace]
+    workbenches: list[Workbench]
     running: bool = False
     awake: bool = False
     thread: threading.Thread
@@ -43,7 +41,6 @@ class Agent:
         self,
         pubsub: PubSub,
         llm: LLM,
-        vector_store: Optional[VectorStore],
         toolbox: Toolbox,
         verbose: bool,
         silence_actions: bool,
@@ -56,23 +53,22 @@ class Agent:
         self.waiting_for: str | None = None
         self._stop_requested = threading.Event()
         self.llm = llm
+        self.tokens = TokenControl(llm)
         self.toolbox = toolbox
         self.verbose = verbose
         self.silence_actions = silence_actions
         self.environment = Environment(pubsub=pubsub)
         self.memory = MemoryEngine(
             pubsub=pubsub,
-            vector_store=vector_store,
             llm=llm,
             service=memory_service,
             recall_limit=memory_recall_limit,
             token_budget=memory_token_budget,
         )
-        self.workspaces = [
+        self.workbenches = [
             Tasks(pubsub=pubsub, silence_actions=silence_actions),
             Notepad(),
         ]
-        self.vector_store = vector_store
         self.thread = threading.Thread(target=self.run)
         self.identity = IdentityManager(pubsub=pubsub, toolbox=self.toolbox)
 
@@ -81,8 +77,8 @@ class Agent:
     def initialize_default_tools(self):
         self.toolbox.register_tools(INTERACTION_TOOLS)
 
-        for workspace in self.workspaces:
-            self.toolbox.register_tools(workspace.get_tools())
+        for workbench in self.workbenches:
+            self.toolbox.register_tools(workbench.get_tools())
         self.toolbox.register_tool(self.identity.set_role_tool())
 
         self.toolbox.register_tools(self.memory.get_tools())
@@ -149,7 +145,7 @@ class Agent:
             self.waiting_for = None
             self.pubsub.publish("agent.resumed", {"mode": previous})
         self.awake = (
-            any(workspace.has_pending_work() for workspace in self.workspaces)
+            any(workbench.has_pending_work() for workbench in self.workbenches)
             or self.environment.new_stimuli()
         )
         return self.awake
@@ -179,15 +175,25 @@ class Agent:
             )
         )
 
+        tools = self.toolbox.get_tools_listed()
+        window = self.tokens.trailing_window(self.messages, tools)
+        removed = len(self.messages) - len(window)
+        if removed:
+            self.messages[:] = window
+            self.pubsub.publish(
+                "agent.context_trimmed",
+                {"removed_messages": removed, "retained_messages": len(window)},
+            )
+
         with terminal.thinking():
             task_ids = [
                 task_id
-                for workspace in self.workspaces
-                for task_id in workspace.active_task_ids()
+                for workbench in self.workbenches
+                for task_id in workbench.active_task_ids()
             ]
             task_id = task_ids[0] if len(task_ids) == 1 else "__shared__"
             response_message = self.llm.get_response(
-                self.messages, self.toolbox.get_tools_listed(), task_id=task_id
+                self.messages, tools, task_id=task_id
             )
 
         self.messages.append(response_message)
@@ -283,10 +289,10 @@ class Agent:
         This is where the perception of the environment will be generated.
         """
         sections = [self.environment.get_environment()]
-        for workspace in self.workspaces:
-            view = workspace.build_view()
+        for workbench in self.workbenches:
+            view = workbench.build_view()
             if view:
-                sections.append(f"## Workspace: {workspace.name}\n{view}")
+                sections.append(f"## Workbench: {workbench.name}\n{view}")
         return "\n\n".join(section for section in sections if section)
 
     def remember(self):
@@ -300,10 +306,10 @@ class Agent:
         memory = self.remember()
 
         role = self.identity.current_role
-        prompt = f"# Current Role:\n{role.name}\n{role.identity}\n" if role else ""
+        prompt = f"# Current Role:\n{role.name}\n{role.identity}\n\n\n" if role else ""
 
         if perception:
-            prompt += f"# Environment:\n{perception}\n"
+            prompt += f"# Environment:\n{perception}\n\n\n"
 
         if memory:
             prompt += f"# Memory:\n{memory}\n"
@@ -311,11 +317,3 @@ class Agent:
         self.pubsub.publish("new_agent_perception", prompt)
 
         return prompt
-
-    def check_token_length(self):
-        try:
-            tokens = get_current_num_tokens(self.messages, self.llm.model_name)
-            return tokens
-        except Exception as e:
-            self.error(f"Error getting token length: {e}")
-            return 0

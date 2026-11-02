@@ -3,7 +3,7 @@ from typing import Any
 from ddgs import DDGS
 
 from tools.index import Tool
-from utils.pubsub import PubSub
+from application.events import PubSub
 
 
 def run_search_duckduckgo(args: Any, pubsub: PubSub) -> str:

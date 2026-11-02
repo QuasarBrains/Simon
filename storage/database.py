@@ -14,7 +14,7 @@ class Database:
     @classmethod
     def from_config(cls, config: Mapping[str, str]) -> "Database":
         path = Path(
-            config.get("DATABASE_PATH") or "datastore/simple-agent.sqlite3"
+            config.get("DATABASE_PATH") or "datastore/simon.sqlite3"
         ).expanduser()
         if not path.is_absolute():
             path = Path(__file__).resolve().parent.parent / path

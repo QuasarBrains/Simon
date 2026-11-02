@@ -1,9 +1,9 @@
 """Single-file application configuration, with optional environment compatibility."""
 
-from collections.abc import Mapping
-from pathlib import Path
 import os
 import tomllib
+from collections.abc import Mapping
+from pathlib import Path
 
 from dotenv import dotenv_values
 from pydantic import Field, PrivateAttr, ValidationError
@@ -16,23 +16,21 @@ class ConfigurationError(ValueError):
 
 
 class AppSettings(Settings):
-    log_directory: str = Field(default="simple-agent-logs", min_length=1)
+    log_directory: str = Field(default="simon-logs", min_length=1)
     verbose: bool = False
     silence_actions: bool = False
 
 
 class MemorySettings(Settings):
     backend: str = "none"
-    database_path: str = "datastore/simple-agent.sqlite3"
+    database_path: str = "datastore/simon.sqlite3"
+    directory: str = ""
     namespace: str = "default"
     recall_limit: int = Field(default=3, ge=1, le=100)
     context_token_budget: int = Field(default=1000, gt=0)
     embedding_provider: str = "openai"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int | None = Field(default=None, gt=0)
-    simple_vector_store_url: str = ""
-    simple_vector_store_directory: str = ""
-    simple_vector_store_name: str = "simple-agent-memory"
 
 
 class Config(Settings):
@@ -68,15 +66,13 @@ class Config(Settings):
 MEMORY_ENV = {
     "MEMORY_BACKEND": "backend",
     "DATABASE_PATH": "database_path",
+    "MEMORY_DIRECTORY": "directory",
     "MEMORY_NAMESPACE": "namespace",
     "MEMORY_RECALL_LIMIT": "recall_limit",
     "MEMORY_CONTEXT_TOKEN_BUDGET": "context_token_budget",
     "EMBEDDING_PROVIDER": "embedding_provider",
     "EMBEDDING_MODEL": "embedding_model",
     "EMBEDDING_DIMENSIONS": "embedding_dimensions",
-    "SIMPLE_VECTOR_STORE_URL": "simple_vector_store_url",
-    "SIMPLE_VECTOR_STORE_DIRECTORY": "simple_vector_store_directory",
-    "SIMPLE_VECTOR_STORE_NAME": "simple_vector_store_name",
 }
 
 ENV_OPTIONS = {
@@ -154,13 +150,6 @@ def load_config(
                 value = values.get(name)
                 if value:
                     _assign(data, keys, value, overwrite)
-            if values.get("VECTOR_STORE_CHOICE") and not values.get("MEMORY_BACKEND"):
-                _assign(
-                    data,
-                    ("memory", "backend"),
-                    values["VECTOR_STORE_CHOICE"],
-                    overwrite,
-                )
         # Deprecated limits only fill TOML gaps; process environment beats .env.
         legacy_values = dict(fallback) | dict(environ)
         for name, keys in [

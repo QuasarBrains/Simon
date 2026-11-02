@@ -2,7 +2,7 @@ from typing import Any, List
 import re
 import os
 from tools.index import Tool
-from utils.pubsub import PubSub
+from application.events import PubSub
 
 
 def parse_gitignore(path: str) -> List[str]:

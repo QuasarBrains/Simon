@@ -7,7 +7,7 @@ Give these instructions to a coding agent with terminal and repository access to
 Prepare an instance that a human can start with:
 
 ```sh
-uv run python simple-agent.py
+uv run python simon.py
 ```
 
 - Never request, generate, display, or commit API keys. Do not ask a human to paste secrets into the conversation.
@@ -27,8 +27,8 @@ git --no-optional-locks status --short
 For a new checkout, clone into the human's chosen workspace:
 
 ```sh
-git clone https://github.com/AidanTilgner/Simple-Agent.git
-cd Simple-Agent
+git clone https://github.com/AidanTilgner/Simon.git
+cd Simon
 ```
 
 Run the remaining commands from the repository root. When using an agent terminal tool with a working-directory argument, set that argument instead of embedding `cd` in a command.
@@ -79,11 +79,11 @@ Ask which provider and model the human wants. Set `[llm] provider` and the match
 Application, memory, generation, budgets and pricing all live in this same file.
 No `.env` file is required. Legacy environment-variable names remain available:
 
-| Provider | `MODEL_CHOICE` | Model variable | Secret for the human to fill in |
-| --- | --- | --- | --- |
-| OpenAI | `openai` | `OPENAI_MODEL` | `OPENAI_API_KEY` |
-| Anthropic | `anthropic` | `ANTHROPIC_MODEL` | `ANTHROPIC_API_KEY` |
-| Google Gemini | `google` | `GEMINI_MODEL` | `GEMINI_API_KEY` |
+| Provider      | `MODEL_CHOICE` | Model variable    | Secret for the human to fill in |
+| ------------- | -------------- | ----------------- | ------------------------------- |
+| OpenAI        | `openai`       | `OPENAI_MODEL`    | `OPENAI_API_KEY`                |
+| Anthropic     | `anthropic`    | `ANTHROPIC_MODEL` | `ANTHROPIC_API_KEY`             |
+| Google Gemini | `google`       | `GEMINI_MODEL`    | `GEMINI_API_KEY`                |
 
 Use a model identifier the human supplies or verifies is available to their account. Model availability changes; do not assume the application's historical defaults still exist. Only the chosen provider needs credentials.
 
@@ -112,7 +112,7 @@ Do not set up a vector store for the basic smoke test. Persistent memory require
 ## 5. Run checks without credentials or LLM calls
 
 ```sh
-uv run --locked python simple-agent.py --help
+uv run --locked python simon.py --help
 uv run --locked python -m unittest discover -s tests -v
 uv pip check --python .venv/bin/python
 ```
@@ -141,13 +141,13 @@ Report what was configured, which checks passed, and what remains for the human.
 The instance can now be started with:
 
 ```sh
-uv run python simple-agent.py
+uv run python simon.py
 ```
 
 For an explicit provider override:
 
 ```sh
-uv run python simple-agent.py --llm openai
+uv run python simon.py --llm openai
 ```
 
 `--llm` overrides `MODEL_CHOICE`; it does not replace the corresponding API key or model settings.

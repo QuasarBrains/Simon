@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 Money = Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
+TokenLimit = Annotated[int, Field(gt=0, strict=True)]
 
 
 class Settings(BaseModel):
@@ -14,13 +15,21 @@ class Settings(BaseModel):
 
 
 class Generation(Settings):
-    max_output_tokens: int = Field(default=4096, gt=0, strict=True)
+    max_output_tokens: TokenLimit = 4096
     max_output_retries: int = Field(default=1, ge=0, le=3, strict=True)
-    max_retry_output_tokens: int = Field(default=16384, gt=0, strict=True)
+    max_retry_output_tokens: TokenLimit = 16384
     max_estimated_input_tokens: int | None = Field(default=None, gt=0, strict=True)
+    context_window_tokens: TokenLimit | None = None
     tool_choice: Literal["auto", "required", "none"] = "auto"
     parallel_tool_calls: bool = True
     reasoning_effort: str | None = None
+
+    @property
+    def reserved_output_tokens(self) -> int:
+        limit = self.max_output_tokens
+        for _ in range(self.max_output_retries):
+            limit = max(limit, min(limit * 2, self.max_retry_output_tokens))
+        return limit
 
 
 class ProviderSettings(Settings):
@@ -71,6 +80,7 @@ class LLMConfig(Settings):
     cost: CostPolicy = Field(default_factory=CostPolicy)
     providers: dict[str, ProviderSettings] = Field(default_factory=dict)
     pricing: list[Price] = Field(default_factory=list)
+
     display_max_chars: int | None = Field(default=None, gt=0, strict=True)
 
     @model_validator(mode="after")
@@ -78,6 +88,7 @@ class LLMConfig(Settings):
         keys = [(p.provider, p.model) for p in self.pricing]
         if len(keys) != len(set(keys)):
             raise ValueError("Duplicate provider/model pricing entries")
+
         if set(self.providers) - {"openai", "anthropic", "google"}:
             raise ValueError("Unknown provider in configuration")
         return self
@@ -94,7 +105,7 @@ class LLMConfig(Settings):
 
 
 def load_config(path: str | Path | None = None) -> LLMConfig:
-    """Compatibility entry point; application configuration now lives in config.py."""
-    from config import load_config as load_app_config
+    """Compatibility entry point for application/config.py."""
+    from application.config import load_config as load_app_config
 
     return load_app_config(path).llm

@@ -90,8 +90,37 @@ Before dispatch, the full serialized provider request is estimated using UTF-8
 bytes × `estimate_multiplier`, plus `estimate_overhead_tokens`. This includes
 system instructions, tool schemas, calls/results, and native continuation data.
 It intentionally overestimates ordinary text; opaque replay data may make it
-particularly conservative. It is not an exact provider tokenizer. Optional
-`generation.max_estimated_input_tokens` rejects oversized requests.
+particularly conservative. It is not an exact provider tokenizer. Actual usage
+and costs continue to come from provider-reported tokens, not these estimates.
+
+### Trailing context window
+
+`agent/tokens.py` owns the agent's context-window policy. The optional
+`llm.generation.context_window_tokens` setting is an operator-selected total
+input-plus-output budget, not a discovered or catalog-enforced model capability.
+Provider-specific generation overrides are supported. The optional
+`max_estimated_input_tokens` setting adds an input-only cap. With no context boundary
+or input cap, history is not windowed. Token-limit settings accept positive integers,
+not `"auto"`. There is no model-capability catalog or automatic limit resolution;
+the provider remains responsible for its actual model limits.
+
+Before inference, the agent retains the largest trailing sequence of complete
+iterations that fits the estimated input budget, reserving room for the largest
+output allowance reachable through configured retries. Each iteration starts with
+its user/perception message; assistant native content, tool calls, and their results
+are kept or removed together. Leading system messages, the LLM system prompt, active
+tool schemas, and the newest iteration are preserved. Tasks, notepad state, memory,
+and cumulative cost records are not cleared when older history leaves the window.
+Removed history is not summarized, compacted, or reinserted; existing session logs
+are unaffected. A metadata-only `agent.context_trimmed` event records message counts.
+
+If the required current input cannot fit, the agent stops before dispatch rather
+than truncating messages or tool results. Direct LLM calls, including auxiliary
+text-only calls, enforce the same configured boundaries but do not automatically
+window their inputs. Every dispatched attempt is checked again before budget
+reservation. The conservative byte-based estimate can discard history well before
+the provider's actual tokenizer would require it; this is an estimated local bound,
+not an exact model-capacity measurement.
 
 The tracker reserves estimated input cost plus the full allowed output cost,
 assuming no cache savings and the highest configured input/cache-write rate.
@@ -126,21 +155,23 @@ and configuration setting instead of only saying "Incomplete function call".
 
 ## Logs and troubleshooting
 
-`app.log_directory` defaults to `simple-agent-logs`. The CLI prints its resolved
+`app.log_directory` defaults to `simon-logs`. The CLI prints its resolved
 path at startup. Logs append across launches; `--clear-logs` is the explicit opt-in
 to truncate application log files. Existing flat files remain readable.
 
-| File | Contents |
-| --- | --- |
-| `last_thread.md` | User/assistant conversation and perception snapshots, with session IDs. |
-| `agent.log` | Conversation-history snapshots and tool results; verbose mode adds details. |
-| `toolbox.log` | Executed tool arguments and successful return values. |
-| `errors.log` | Persisted error messages, including why the agent stopped. |
-| `general.log` | General application log events, when published. |
-| `usage.jsonl` | One record per dispatched inference attempt: usage, cost, IDs, duration, outcome and completion diagnostics. |
-| `events.jsonl` | Session boundaries, inference starts/completions/retries, tool starts/results, and errors. |
+| File             | Contents                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `last_thread.md` | User/assistant conversation and perception snapshots, with session IDs.                                      |
+| `agent.log`      | Conversation-history snapshots and tool results; verbose mode adds details.                                  |
+| `toolbox.log`    | Executed tool arguments and successful return values.                                                        |
+| `errors.log`     | Persisted error messages, including why the agent stopped.                                                   |
+| `general.log`    | General application log events, when published.                                                              |
+| `usage.jsonl`    | One record per dispatched inference attempt: usage, cost, IDs, duration, outcome and completion diagnostics. |
+| `events.jsonl`   | Session boundaries, inference starts/completions/retries, tool starts/results, and errors.                   |
 
-JSONL entries have a UTC timestamp and `session_id`. `request_group_id` groups
+The `session.start` event records the runtime-resolved generation settings,
+including resolved auto limits. JSONL entries have a UTC timestamp and `session_id`.
+`request_group_id` groups
 output-limit recovery attempts; `attempt` identifies each dispatch. The usage
 record's `status` describes cost accounting (`reported` or `unknown`), while
 `outcome` and `diagnostics.response_status` describe execution and provider state.
@@ -228,5 +259,5 @@ resolve to a newer snapshot. Use snapshot-specific catalog entries when prices
 differ. Review SDK/API migration notes before updating `uv.lock`, regenerate the
 pip export, run offline checks, and exercise a small text/tool continuation with
 the intended account. Keep cross-restart budgets, tiered pricing, hosted-tool
-charges and context compaction as explicit follow-up work rather than assuming
+charges as explicit follow-up work rather than assuming
 the current flat-text ledger covers them.

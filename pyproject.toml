@@ -1,6 +1,6 @@
 [project]
-name = "simple-agent"
-version = "0.1.0"
+name = "simon"
+version = "1.0.0"
 description = "An experimental command-line LLM agent with roles, tools, and optional memory."
 readme = "Readme.md"
 requires-python = ">=3.12,<3.13"

@@ -3,6 +3,7 @@
 import argparse
 import os
 import signal
+from dataclasses import asdict
 from pathlib import Path
 from threading import current_thread
 from typing import Optional
@@ -10,24 +11,21 @@ from typing import Optional
 from rich.text import Text
 
 from agent.agent import Agent
-from config import load_config
+from application.cli_input import CLIInput
+from application.config import load_config
+from application.events import PubSub
+from application.runlog import SessionLogger
+from application.terminal import console, terminal
 from llms.llm import create_llm
 from memory.config import create_memory_service
-from memory.service import MemoryService
+from memory.service import MemoryService, SynchronizableMemoryService
 from tools.index import Toolbox
-from utils.cli_input import CLIInput
-from utils.pubsub import PubSub
-from utils.runlog import SessionLogger
-from utils.terminal import console, terminal
 
 verbose = False
 silence_actions = False
-log_directory = "simple-agent-logs"
+log_directory = "simon-logs"
 
-# Get the directory of the current script
-script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Construct the absolute path to system_prompt.md
+script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 system_prompt_path = os.path.join(script_dir, "system_prompt.md")
 
 SYSTEM_PROMPT = Path(system_prompt_path).read_text()
@@ -89,6 +87,7 @@ def handle_logs():
         "tool.approval",
         "agent.waiting",
         "agent.resumed",
+        "agent.context_trimmed",
     ):
         PUBSUB.subscribe(name, lambda data, event=name: RUN_LOGGER.event(event, data))
 
@@ -136,6 +135,14 @@ def signal_handler(sig, frame):
     raise KeyboardInterrupt
 
 
+def show_memory_sync(service):
+    if isinstance(service, SynchronizableMemoryService):
+        report = service.last_sync_report
+        console.print(Text(f"{report.directory}\n{report.summary()}", style="dim"))
+        for issue in report.conflicts + report.errors:
+            console.print(Text(issue, style="yellow"))
+
+
 PUBSUB.subscribe("new_agent_message", on_new_agent_message)
 PUBSUB.subscribe("new_agent_prompt", on_new_agent_message_with_prompt)
 PUBSUB.subscribe("new_agent_perception", on_new_agent_perception)
@@ -167,10 +174,31 @@ if __name__ == "__main__":
         help="Application config file (defaults to CONFIG_FILE or config.toml).",
     )
     parser.add_argument("--llm-config", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--sync-memory",
+        action="store_true",
+        help="Synchronize the configured Markdown memory directory and exit without starting chat.",
+    )
     args = parser.parse_args()
 
     try:
         config = load_config(args.config or args.llm_config)
+        if args.sync_memory:
+            service = None
+            try:
+                service = create_memory_service(config.memory_options())
+                if not isinstance(service, SynchronizableMemoryService):
+                    parser.error(
+                        "Set [memory] backend = 'local' and directory = 'memories' to synchronize Markdown"
+                    )
+                service.startup()
+                show_memory_sync(service)
+                raise SystemExit(1 if service.last_sync_report.pending else 0)
+            except Exception as error:
+                parser.error(f"Memory synchronization failed: {error}")
+            finally:
+                if service is not None:
+                    service.close()
         llm_choice = args.llm or config.llm.provider_name
         settings = config.llm.provider(llm_choice)
         if not settings.api_key or not settings.api_key.get_secret_value():
@@ -189,7 +217,7 @@ if __name__ == "__main__":
             {
                 "provider": llm_choice,
                 "model": LLM.model_name,
-                "generation": settings.generation.model_dump(),
+                "generation": LLM.provider.settings.generation.model_dump(),
             },
         )
     except Exception as error:
@@ -248,6 +276,9 @@ if __name__ == "__main__":
         MEMORY_SERVICE = create_memory_service(config.memory_options())
         if MEMORY_SERVICE is not None:
             MEMORY_SERVICE.startup()
+            show_memory_sync(MEMORY_SERVICE)
+            if isinstance(MEMORY_SERVICE, SynchronizableMemoryService):
+                RUN_LOGGER.event("memory.sync", asdict(MEMORY_SERVICE.last_sync_report))
     except Exception as error:
         RUN_LOGGER.text("errors.log", f"Memory startup failed: {error}")
         RUN_LOGGER.event("startup.error", {"message": str(error)})
@@ -274,7 +305,6 @@ if __name__ == "__main__":
         pubsub=PUBSUB,
         llm=LLM,
         toolbox=TOOLBOX,
-        vector_store=None,
         verbose=verbose,
         silence_actions=silence_actions,
         memory_service=MEMORY_SERVICE,

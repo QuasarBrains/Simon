@@ -102,7 +102,7 @@ def run(args, pubsub):
     try:
         backend = sandbox_backend()
         timeout = args.get("timeout", DEFAULT_TIMEOUT)
-        with tempfile.TemporaryDirectory(prefix="simple-agent-python-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="simon-python-") as temporary:
             directory = Path(temporary).resolve()
             profile = sandbox_profile(directory)
             environment = {

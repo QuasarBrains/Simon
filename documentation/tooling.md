@@ -23,7 +23,7 @@ for every role, not repeated in individual role tool lists.
 ### Core memory operations
 
 Memory is a core agent module, with `memory.add`, `memory.update`, and
-`memory.remove` defined in `agent/memory.py`. `MemoryEngine.get_tools()` supplies
+`memory.remove` defined in `memory/engine.py`. `MemoryEngine.get_tools()` supplies
 instance-bound tools using the shared `Tool`/`ToolResult` interface. The harness
 registers them directly rather than through a role capability library; tools remain available across role
 changes. Disabled memory yields no tools, and add/search-only services omit

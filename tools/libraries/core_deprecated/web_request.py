@@ -1,5 +1,5 @@
 from tools.index import Tool
-from utils.pubsub import PubSub
+from application.events import PubSub
 import requests
 from typing import Any
 

@@ -7,7 +7,7 @@ from typing import Callable
 
 from prompt_toolkit.patch_stdout import patch_stdout
 
-from utils.terminal import terminal
+from application.terminal import terminal
 
 
 @dataclass(eq=False)

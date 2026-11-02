@@ -6,7 +6,7 @@ from typing import Any, Callable, Literal
 from jsonschema import Draft202012Validator, ValidationError
 
 from tools.names import validate_tool_name
-from utils.pubsub import PubSub
+from application.events import PubSub
 
 
 @dataclass(frozen=True)

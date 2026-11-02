@@ -1,11 +1,11 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, List
 
-from agent.workspaces.workspace import Workspace
-
-from tools.index import Tool
-from utils.pubsub import PubSub
-from utils.terminal import console
+from application.events import PubSub
+from application.terminal import console
+from tools.index import Tool, ToolResult
+from workbenches.workbench import Workbench
 
 
 @dataclass
@@ -17,7 +17,7 @@ class Task:
     notes: str
 
 
-class Tasks(Workspace):
+class Tasks(Workbench):
     name = "tasks"
 
     pubsub: PubSub
@@ -37,6 +37,7 @@ class Tasks(Workspace):
             self.complete_task_tool(),
             self.modify_task_notes_tool(),
             self.modify_task_requirements_tool(),
+            self.export_tool(),
         ]
 
     def has_pending_work(self) -> bool:
@@ -170,6 +171,105 @@ class Tasks(Workspace):
         except Exception as e:
             console.print(f"Error modifying requirements: {e}", style="bold red")
             return False
+
+    def export(
+        self,
+        path: str,
+        mode: str = "file",
+        overwrite: bool = False,
+        create_parents: bool = False,
+    ) -> ToolResult:
+        if not path.strip():
+            raise ValueError("An export path is required.")
+        if mode not in {"file", "directory"}:
+            raise ValueError("Export mode must be 'file' or 'directory'.")
+        destination = Path(path).expanduser().absolute()
+
+        def render_task(task: Task, level: int) -> str:
+            heading = "#" * (level + 1)
+            requirements = "\n".join(f"- {item}" for item in task.requirements)
+            return (
+                f"{'#' * level} {task.id}\n\n"
+                f"{task.description}\n\n"
+                f"Completed: {task.completed}\n\n"
+                f"{heading} Requirements\n\n{requirements}\n\n"
+                f"{heading} Notes\n\n{task.notes}\n"
+            )
+
+        if mode == "file":
+            tasks = "\n".join(render_task(task, 2) for task in self.tasks)
+            exports = {destination: f"# Tasks\n\n{tasks}"}
+        else:
+            if destination.exists() and not destination.is_dir():
+                raise ValueError(f"Not a directory: {destination}")
+            exports = {
+                destination / f"{task.id}.md": render_task(task, 1)
+                for task in self.tasks
+            }
+
+        for target in exports:
+            if target.is_symlink():
+                raise ValueError(f"Refusing to export over a symbolic link: {target}")
+            if target.exists():
+                if not target.is_file():
+                    raise ValueError(f"Not a regular file: {target}")
+                if not overwrite:
+                    raise FileExistsError(f"File exists; set overwrite=true: {target}")
+
+        if mode == "directory":
+            destination.mkdir(parents=create_parents, exist_ok=True)
+        elif create_parents:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+
+        bytes_written = 0
+        for target, content in exports.items():
+            data = content.encode("utf-8")
+            with target.open("wb" if overwrite else "xb") as stream:
+                stream.write(data)
+            bytes_written += len(data)
+        return ToolResult(
+            content=f"Tasks exported to {destination}.",
+            metadata={
+                "path": str(destination),
+                "mode": mode,
+                "files": [str(target) for target in exports],
+                "task_count": len(self.tasks),
+                "completed_count": len(self.get_completed_tasks()),
+                "incomplete_count": len(self.get_incomplete_tasks()),
+                "bytes_written": bytes_written,
+            },
+        )
+
+    def export_tool(self) -> Tool:
+        def run(args: Any, pubsub: PubSub):
+            return self.export(**args)
+
+        return Tool(
+            name="tasks.export",
+            description=(
+                "Export all incomplete and completed tasks, including IDs, descriptions, "
+                "requirements, completion status, and notes, as UTF-8 Markdown: one combined "
+                "file or a directory containing task_<number>.md files. Existing files "
+                "require overwrite=true; missing parent directories require "
+                "create_parents=true. Does not change tasks or disclosure state."
+            ),
+            function=run,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+                    "mode": {
+                        "type": "string",
+                        "enum": ["file", "directory"],
+                        "default": "file",
+                    },
+                    "overwrite": {"type": "boolean", "default": False},
+                    "create_parents": {"type": "boolean", "default": False},
+                },
+                "required": ["path"],
+                "additionalProperties": False,
+            },
+        )
 
     def create_task_tool(self) -> Tool:
         def run(args: Any, pubsub: PubSub):

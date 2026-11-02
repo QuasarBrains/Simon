@@ -73,11 +73,18 @@ class MemoryUpdate:
     content: str | None = None
     type: str | None = None
     importance: str | None = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         if all(
             value is None
-            for value in (self.title, self.content, self.type, self.importance)
+            for value in (
+                self.title,
+                self.content,
+                self.type,
+                self.importance,
+                self.metadata,
+            )
         ):
             raise MemoryValidationError("Provide at least one memory field to update")
         MemoryDraft(
@@ -85,6 +92,7 @@ class MemoryUpdate:
             content=self.content if self.content is not None else "unchanged",
             type=self.type if self.type is not None else "semantic",
             importance=self.importance if self.importance is not None else "medium",
+            metadata=self.metadata if self.metadata is not None else {},
         )
 
     def apply(self, memory: Memory) -> MemoryDraft:
@@ -96,7 +104,7 @@ class MemoryUpdate:
             if self.importance is not None
             else memory.importance,
             namespace=memory.namespace,
-            metadata=memory.metadata,
+            metadata=self.metadata if self.metadata is not None else memory.metadata,
         )
 
 
@@ -138,7 +146,7 @@ class MemoryService(Protocol):
 
 @runtime_checkable
 class EditableMemoryService(MemoryService, Protocol):
-    """Optional standard capability; legacy add/search adapters remain valid."""
+    """Optional editing capability for custom and built-in services."""
 
     def get(self, memory_id: int | str, namespace: str = "default") -> Memory: ...
 
@@ -150,3 +158,32 @@ class EditableMemoryService(MemoryService, Protocol):
 @runtime_checkable
 class RemovableMemoryService(MemoryService, Protocol):
     def remove(self, memory_id: int | str, namespace: str = "default") -> Memory: ...
+
+
+@dataclass
+class MemorySyncReport:
+    directory: str
+    imported: int = 0
+    updated: int = 0
+    exported: int = 0
+    removed: int = 0
+    conflicts: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def pending(self) -> bool:
+        return bool(self.conflicts or self.errors)
+
+    def summary(self) -> str:
+        return (
+            f"Markdown memory: {self.imported} imported, {self.updated} updated, "
+            f"{self.exported} exported, {self.removed} removed; "
+            f"{len(self.conflicts)} conflicts, {len(self.errors)} errors."
+        )
+
+
+@runtime_checkable
+class SynchronizableMemoryService(MemoryService, Protocol):
+    last_sync_report: MemorySyncReport
+
+    def sync(self) -> MemorySyncReport: ...

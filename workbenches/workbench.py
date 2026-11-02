@@ -5,15 +5,15 @@ from tools.index import Tool
 
 
 @dataclass
-class WorkspaceState:
+class WorkbenchState:
     open: bool = True
 
 
-class Workspace(ABC):
+class Workbench(ABC):
     name: str
 
     def __init__(self) -> None:
-        self.state = WorkspaceState()
+        self.state = WorkbenchState()
 
     def open(self) -> None:
         self.state.open = True
@@ -27,11 +27,11 @@ class Workspace(ABC):
     def disclosure_tool(self) -> Tool:
         def run(args, pubsub):
             self.open() if args["open"] else self.close()
-            return f"{self.name} workspace is {'open' if self.is_open() else 'closed'}."
+            return f"{self.name} workbench is {'open' if self.is_open() else 'closed'}."
 
         return Tool(
-            name=f"workspace.{self.name}.set_open",
-            description="Show the workspace's working view or minimize it without deleting state or pausing work.",
+            name=f"workbench.{self.name}.set_open",
+            description="Show the workbench's working view or minimize it without deleting state or pausing work.",
             function=run,
             parameters={
                 "type": "object",

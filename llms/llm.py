@@ -1,7 +1,7 @@
-from dataclasses import asdict, dataclass, field
 import json
 import math
 import time
+from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Protocol
 from uuid import uuid4
 
@@ -161,6 +161,21 @@ class LLM:
     def close(self):
         self.provider.close()
 
+    def estimate_request_tokens(self, request: dict) -> int:
+        byte_count = len(json.dumps(request, ensure_ascii=False).encode("utf-8"))
+        return (
+            math.ceil(byte_count * self.config.cost.estimate_multiplier)
+            + self.config.cost.estimate_overhead_tokens
+        )
+
+    def estimate_input_tokens(
+        self, messages: list[Message], tools: list[Tool], output_limit: int
+    ) -> int:
+        request = self.provider.build_request(
+            messages, tools, self.system_prompt, False, max_output_tokens=output_limit
+        )
+        return self.estimate_request_tokens(request)
+
     def get_response(
         self, messages: list[Message], tools: list[Tool], task_id: str | None = None
     ) -> Message:
@@ -223,12 +238,7 @@ class LLM:
         request = self.provider.build_request(
             messages, tools, system, text_only, max_output_tokens=output_limit
         )
-        # Full serialized request includes instructions, schemas and native replay data.
-        byte_count = len(json.dumps(request, ensure_ascii=False).encode("utf-8"))
-        estimate = (
-            math.ceil(byte_count * self.config.cost.estimate_multiplier)
-            + self.config.cost.estimate_overhead_tokens
-        )
+        estimate = self.estimate_request_tokens(request)
         generation = self.provider.settings.generation
         if (
             generation.max_estimated_input_tokens
@@ -236,6 +246,15 @@ class LLM:
         ):
             raise LLMError(
                 f"Estimated input ({estimate} tokens) exceeds configured context budget"
+            )
+        if (
+            generation.context_window_tokens is not None
+            and estimate + output_limit > generation.context_window_tokens
+        ):
+            raise LLMError(
+                f"Estimated input ({estimate} tokens) plus output allowance "
+                f"({output_limit} tokens) exceeds context_window_tokens "
+                f"({generation.context_window_tokens})."
             )
         record = self.tracker.reserve(
             self.provider.name,

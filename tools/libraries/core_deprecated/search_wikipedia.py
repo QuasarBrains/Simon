@@ -2,11 +2,11 @@ from typing import Any
 
 import wikipediaapi
 
+from application.events import PubSub
 from tools.index import Tool
-from utils.pubsub import PubSub
 
 client = wikipediaapi.Wikipedia(
-    user_agent="Simple-Agent/0.1 (https://github.com/AidanTilgner/Simple-Agent)",
+    user_agent="Simon-Agent/0.1 (https://github.com/QuasarBrains/Simon)",
     language="en",
 )
 

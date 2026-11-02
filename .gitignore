@@ -5,7 +5,7 @@ venv/
 .venv/
 .uv-cache/
 .uv-python/
-simple-agent-logs/
+simon-logs/
 __pycache__/
 agent.thread
 agent.log
@@ -16,3 +16,4 @@ playground/*
 _private/
 datastore/
 config.toml
+memories/

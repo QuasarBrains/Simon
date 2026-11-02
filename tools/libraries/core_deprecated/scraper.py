@@ -2,7 +2,7 @@ from tools.index import Tool
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
-from utils.pubsub import PubSub
+from application.events import PubSub
 from typing import Any
 from bs4 import BeautifulSoup
 import requests

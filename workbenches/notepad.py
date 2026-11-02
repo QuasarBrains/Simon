@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
-from agent.workspaces.workspace import Workspace, WorkspaceState
-from tools.index import Tool
+from tools.index import Tool, ToolResult
+from workbenches.workbench import Workbench, WorkbenchState
 
 
 @dataclass
@@ -23,11 +24,11 @@ class Page:
 
 
 @dataclass
-class State(WorkspaceState):
+class State(WorkbenchState):
     current_page: int | None = None
 
 
-class Notepad(Workspace):
+class Notepad(Workbench):
     name = "notepad"
 
     def __init__(self) -> None:
@@ -118,10 +119,75 @@ class Notepad(Workspace):
     def read_note(self, note_id: str) -> str:
         return self.notes[note_id].content
 
+    def export(
+        self,
+        path: str,
+        mode: str = "file",
+        overwrite: bool = False,
+        create_parents: bool = False,
+    ) -> ToolResult:
+        if not path.strip():
+            raise ValueError("An export path is required.")
+        if mode not in {"file", "directory"}:
+            raise ValueError("Export mode must be 'file' or 'directory'.")
+        destination = Path(path).expanduser().absolute()
+
+        def render_page(page: Page, level: int) -> str:
+            notes = "\n\n".join(
+                f"{'#' * (level + 1)} {note.id}\n\n{note.content}"
+                for note in page.content
+            )
+            return f"{'#' * level} {page.title}\n\n{notes}".rstrip() + "\n"
+
+        if mode == "file":
+            pages = "\n".join(render_page(page, 2) for page in self.pages.values())
+            exports = {destination: f"# Notepad\n\n{pages}"}
+        else:
+            if destination.exists() and not destination.is_dir():
+                raise ValueError(f"Not a directory: {destination}")
+            exports = {
+                destination / f"{page.id}.md": render_page(page, 1)
+                for page in self.pages.values()
+            }
+
+        for target in exports:
+            if target.is_symlink():
+                raise ValueError(f"Refusing to export over a symbolic link: {target}")
+            if target.exists():
+                if not target.is_file():
+                    raise ValueError(f"Not a regular file: {target}")
+                if not overwrite:
+                    raise FileExistsError(f"File exists; set overwrite=true: {target}")
+
+        if mode == "directory":
+            destination.mkdir(parents=create_parents, exist_ok=True)
+        elif create_parents:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+
+        bytes_written = 0
+        for target, content in exports.items():
+            data = content.encode("utf-8")
+            with target.open("wb" if overwrite else "xb") as stream:
+                stream.write(data)
+            bytes_written += len(data)
+        return ToolResult(
+            content=f"Notepad exported to {destination}.",
+            metadata={
+                "path": str(destination),
+                "mode": mode,
+                "files": [str(target) for target in exports],
+                "page_count": len(self.pages),
+                "note_count": sum(len(page.content) for page in self.pages.values()),
+                "bytes_written": bytes_written,
+            },
+        )
+
     def get_tools(self) -> list[Tool]:
         def tool(name, description, properties, required, function):
             def run(args, pubsub):
                 result = function(**args)
+                if isinstance(result, ToolResult):
+                    return result
                 return "Notepad updated." if result is None else str(result)
 
             return Tool(
@@ -140,6 +206,25 @@ class Notepad(Workspace):
         text = {"type": "string"}
         return [
             self.disclosure_tool(),
+            tool(
+                "export",
+                "Export all notepad pages and notes as UTF-8 Markdown: one combined file "
+                "or a directory containing page_<number>.md files. Includes closed and "
+                "unselected pages. Existing files require overwrite=true; missing parent "
+                "directories require create_parents=true. Does not change session state.",
+                {
+                    "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+                    "mode": {
+                        "type": "string",
+                        "enum": ["file", "directory"],
+                        "default": "file",
+                    },
+                    "overwrite": {"type": "boolean", "default": False},
+                    "create_parents": {"type": "boolean", "default": False},
+                },
+                ["path"],
+                self.export,
+            ),
             tool(
                 "new_page",
                 "Create and select a session notepad page; returns its number.",
