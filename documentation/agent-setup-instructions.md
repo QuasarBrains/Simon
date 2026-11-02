@@ -1,6 +1,6 @@
 # Agent setup instructions
 
-Give these instructions to a coding agent with terminal and repository access to configure a fresh Simple Agent instance. The agent can install dependencies, prepare configuration, and run offline checks. A human supplies secrets and authorizes any live API test.
+Give these instructions to a coding agent with terminal and repository access to configure a fresh Simon instance. The agent can install dependencies, prepare configuration, and run offline checks. A human supplies secrets and authorizes any live API test.
 
 ## Goal and boundaries
 

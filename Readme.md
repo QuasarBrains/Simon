@@ -1,16 +1,16 @@
-# Simple Agent
+# Simon
 
 See the [changelog](CHANGELOG.md) for notable changes and migration notes.
 
 > [!warning]
-> Simple agent can run commands on your machine. Be aware of the potential for it to make modifications to your system.
+> Simon can run commands on your machine. Be aware of the potential for it to make modifications to your system.
 
 ![Aug-16-2024 11-27-09](https://github.com/user-attachments/assets/3bb43a56-0501-4759-b3b0-ac459f53f692)
 
 > [!note]
-> Simple Agent is still a work in progress! There will likely be bugs and missing features, if you encounter them, please leave an issue!
+> Simon is still a work in progress! There will likely be bugs and missing features, if you encounter them, please leave an issue!
 
-This is an attempt to make a bare-bones, very simple agent based on LLMs and other technologies. The goal is to have a simple agent for use in various purposes:
+This is an attempt to make a bare-bones, very simple agent based on LLMs and other technologies.
 
 1. Experimentation and benchmarking
 2. Understanding and learning myself
@@ -31,7 +31,7 @@ The perception stage combines environmental analysis, session-local workbench vi
 The organization separates agent behavior from application wiring:
 
 - `agent/` owns lifecycle and control: the perception → inference → action loop, environment updates, waiting/resuming, and tool orchestration. `agent/tokens.py` keeps a trailing context window within configured model/input boundaries without compaction; see [context and cost policies](documentation/llm-adapters.md).
-- `workbenches/` owns session-local tasks and notepad state, tools, and perception views. See the [workbench interface](workbenches/workbenches.md).
+- `workbenches/` owns session-local tasks and notepad state, tools, and perception views. See [Adding a workbench](documentation/adding-a-workbench.md).
 - `memory/` owns durable memory. `memory/engine.py` owns recall, prompt formatting, and memory tools; service contracts and backends live alongside it.
 - `roles/` defines role identities, prompt guidance, and tool selections. `tools/` defines shared tool contracts, registration, execution policies, and capability libraries.
 - `application/` assembles the runtime and owns its CLI-facing concerns and shared event transport (`application/events.py`). `application/cli.py` contains the existing CLI implementation and runtime wiring; the root `simple-agent.py` is a thin launcher that uses `runpy` to execute `application.cli`. `application/config.py` loads configuration; `application/terminal.py`, `application/cli_input.py`, and `application/runlog.py` provide presentation, interactive input/approval, and session logging.
@@ -39,7 +39,7 @@ The organization separates agent behavior from application wiring:
 
 ## Prerequisites
 
-To make Simple Agent work well, you'll need to meet the following prerequisites:
+To make Simon work well, you'll need to meet the following prerequisites:
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) (follow the official installation instructions)
 - Access to an LLM provider: OpenAI, Anthropic, or Google Gemini
@@ -144,7 +144,7 @@ for completion diagnostics and bounded output-limit recovery settings.
 You might want to extend or enhance the functionality of the tool, and if you do I'd love to hear how it goes! Or even submit a PR if you think it should be a default.
 
 **Modifying Prompts**
-You can modify prompts in `agent/agent.py`, `memory/engine.py`, `agent/environment.py`, and the workbench modules under `workbenches/`. See the [workbench interface](workbenches/workbenches.md) for session-local tools and views. These files are where you'll find the actual programmatic generation logic for several aspects of the prompt. Things might change over time, so I'm not going to go into specifics here. But you might find that you can gain further behavior by modifying these files.
+You can modify prompts in `agent/agent.py`, `memory/engine.py`, `agent/environment.py`, and the workbench modules under `workbenches/`. See [Adding a workbench](documentation/adding-a-workbench.md) for session-local tools and views. These files are where you'll find the actual programmatic generation logic for several aspects of the prompt. Things might change over time, so I'm not going to go into specifics here. But you might find that you can gain further behavior by modifying these files.
 
 The `system_prompt.md` file is the source of the agent's system prompt, which can be modified as well.
 
@@ -178,7 +178,7 @@ Roles focus working practices rather than enforcing permissions, and the agent c
 
 ## Adding Memory
 
-Check out [the tutorial](/documentation/adding-memory.md) to learn how to add memory to Simple Agent. This isn't necessary for the agent to work, however allows its memory to persist between sessions.
+Check out [the tutorial](/documentation/adding-memory.md) to learn how to add memory to Simon. This isn't necessary for the agent to work, however allows its memory to persist between sessions.
 
 Built-in memory runs in-process using the shared application SQLite database and OpenAI embeddings. Set `[memory] backend = "local"` and the OpenAI key in `config.toml` to enable it. Add `directory = "memories"` under `[memory]` for an editable Markdown view: startup imports file edits, agent writes are mirrored, and `uv run simple-agent.py --sync-memory` synchronizes manually without starting chat. Embedding providers are independent of chat models. Custom memory integrations implement the same `MemoryService` interface and register their own factory.
 

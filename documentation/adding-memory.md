@@ -1,6 +1,6 @@
 # Memory
 
-Simple Agent has an optional built-in memory service. It stores memories in the shared application SQLite database and searches embeddings in-process with `sqlite-vss`. Custom integrations implement the same small `MemoryService` contract.
+Simon has an optional built-in memory service. It stores memories in the shared application SQLite database and searches embeddings in-process with `sqlite-vss`. Custom integrations implement the same small `MemoryService` contract.
 
 ## Enable built-in memory
 
@@ -123,7 +123,7 @@ Custom services expose only capabilities they implement. Add/search-only adapter
 
 Memory is a core agent module. `memory/engine.py` owns recall, domain operations, tool schemas, descriptions, and structured result formatting. The harness registers `MemoryEngine.get_tools()` once per agent as shared tools across roles, rather than composing memory into role capability libraries. Tools use the current `Tool`/`ToolResult` interface, canonical `memory.*` names, schema defaults, and the registry approval policy for removal. Disabled memory exposes no tools; available operations follow the configured service's capabilities. Persistence and embeddings stay behind the memory service.
 
-Relative database paths resolve against the Simple Agent project root. The database and parent directories are created on first startup. `datastore/` is ignored by Git. This database is application storage: future modules can add their own tables through `storage.database.Database` and named transactional migrations.
+Relative database paths resolve against the Simon project root. The database and parent directories are created on first startup. `datastore/` is ignored by Git. This database is application storage: future modules can add their own tables through `storage.database.Database` and named transactional migrations.
 
 Other modules can use `Database.from_config(config)` to resolve the same application database, then apply their own named migrations within `with database.connect() as connection:`. Plain database connections do not load vector extensions; vector consumers opt in with `connect(vectors=True)`.
 

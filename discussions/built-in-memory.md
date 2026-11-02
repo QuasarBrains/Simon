@@ -4,9 +4,9 @@ Status: built-in add/search, partial updates, approval-gated soft removal, and o
 
 ## Motivation
 
-The original external vector-store setup worked well for memory, but running and configuring two projects added setup and maintenance time. Simple Agent owns a dedicated memory module that runs in-process, with a small service contract for custom integrations.
+The original external vector-store setup worked well for memory, but running and configuring two projects added setup and maintenance time. Simon owns a dedicated memory module that runs in-process, with a small service contract for custom integrations.
 
-The goal is a single Simple Agent setup with persistent, useful recall. Preserve what works about current memory before introducing more sophisticated memory behavior.
+The goal is a single Simon setup with persistent, useful recall. Preserve what works about current memory before introducing more sophisticated memory behavior.
 
 ## Current integration
 
@@ -19,7 +19,7 @@ The goal is a single Simple Agent setup with persistent, useful recall. Preserve
 
 ## Recommended first release
 
-1. Persistent memory inside Simple Agent, with no external vector-store checkout or server required.
+1. Persistent memory inside Simon, with no external vector-store checkout or server required.
 2. A shared application SQLite database, with a memory table and corresponding vector virtual table using the `sqlite-vss` pattern. Memory is one consumer of application storage, not the owner of a memory-only database.
 3. A standalone `embeddings/` adapter module, patterned after `llms/`. Start with OpenAI using the existing SDK; providers remain independent of chat-model selection and memory storage.
 4. Existing semantic/episodic memory types, importance levels, explicit `memory.add` tool, and recall before inference.
@@ -216,7 +216,7 @@ Done when storage operates independently of the agent, with no live embedding AP
 - Preserve the add tool and recall timing; add bounded formatting and instance-owned state.
 - Verify disabled startup, empty/failed recall clearing, configuration/provider failures, and use from the actual agent thread.
 
-Done when a fresh Simple Agent setup can add a memory, restart, and recall it without a second service.
+Done when a fresh Simon setup can add a memory, restart, and recall it without a second service.
 
 ### 4. Document and establish the pattern
 
