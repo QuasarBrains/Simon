@@ -1,12 +1,12 @@
 ## Codebase Philosophy
 
-The overarching goal of Simon is to be a seed repository for agentic systems, meaning that it is designed to be a minimal, lighweight, and effective core that can be tweaked and extended for specific use-cases. Therefore, our architectural goal favors modularity, extensibility, codebase maintainability, and well-defined abstractions of variable interfaces (e.g. LLMs, Embedding models). Additionally, we sacrifice raw performance capability on specific tasks for broad out-of-the-box utility, with extreme customizability toward particular domain-specific designs. The goal is that the code itself can change relatively easily for expirimentation and tailoring, but also that out-of-the-box customization isn't daunting either (e.g. tool definition, new roles, etc).
+The overarching goal of Klank is to be a seed repository for agentic systems, meaning that it is designed to be a minimal, lighweight, and effective core that can be tweaked and extended for specific use-cases. Therefore, our architectural goal favors modularity, extensibility, codebase maintainability, and well-defined abstractions of variable interfaces (e.g. LLMs, Embedding models). Additionally, we sacrifice raw performance capability on specific tasks for broad out-of-the-box utility, with extreme customizability toward particular domain-specific designs. The goal is that the code itself can change relatively easily for expirimentation and tailoring, but also that out-of-the-box customization isn't daunting either (e.g. tool definition, new roles, etc).
 
 ## Architecture
 
 ### Agent Anatomy
 
-The architecture of Simon follows a continuous loop where an agent percieves its environment, reasons about what it ought to do, takes an action, and sees the result of its action as a reflection of the broader environment. This perceive -> reason -> act loop drives the agent toward its goal. More specifically, the agent's perspective on the world breaks down into a few key abstracted modules:
+The architecture of Klank follows a continuous loop where an agent percieves its environment, reasons about what it ought to do, takes an action, and sees the result of its action as a reflection of the broader environment. This perceive -> reason -> act loop drives the agent toward its goal. More specifically, the agent's perspective on the world breaks down into a few key abstracted modules:
 
 - Perception: any relevant environmental stimuli to the task, e.g. user messages, workbenches, environment information, results of previous tool calls, etc.
 - Memory: a built-in memory module allows the agent to store relevant information as editable memories, which automatically resurface using RAG
@@ -43,3 +43,7 @@ The goal of comments is to make the code they represent skimable, not to explain
 ## Design
 
 TBD
+
+## Documentation
+
+As a general rule, do not update documentation without explicit user permission. The goal of documentation in this repository is primarily for human to human communication. However, agent documentation is permitted with a suffix disclaimer like `<filename>-ai.*`. Edits to existing non-ai documentation can be approved by users or requested.

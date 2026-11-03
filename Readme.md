@@ -1,45 +1,30 @@
-# Simon
+# Klank
 
 See the [changelog](CHANGELOG.md) for notable changes and migration notes.
 
 > [!warning]
-> Simon can run commands on your machine. Be aware of the potential for it to make modifications to your system.
+> Klank can run commands on your machine. Be aware of the potential for it to make modifications to your system.
 
+2024 Baseline (legacy Simple Agent):
 ![Aug-16-2024 11-27-09](https://github.com/user-attachments/assets/3bb43a56-0501-4759-b3b0-ac459f53f692)
 
-> [!note]
-> Simon is still a work in progress! There will likely be bugs and missing features, if you encounter them, please leave an issue!
+2026 Update (Klank v0.2.1):
 
-This is an attempt to make a bare-bones, very simple agent based on LLMs and other technologies.
+Klank exists as a baseline agent architecture built to be extended, modified, and tinkered with. This means that tradeoffs are made in favor of extensibility and approachability of the codebase, not necessarily pure functionality. Out-of-the-box utility is favored, with minimal reliance on external systems. Where there are third-party dependencies (such as inference providers), agnostic interfaces are favored to allow easy porting between options. Klank is designed to be simple but effective, learn more about its [architecture](./ARCHITECTURE.md).
 
-1. Experimentation and benchmarking
-2. Understanding and learning myself
-3. Idk but having three points sounds more solid
+Intended use-cases of Klank include:
 
-## How it works
-
-So put simply, the agent works on a constant loop, involving three main steps:
-
-1. Perception
-2. Inference
-3. Action
-
-The perception stage combines environmental analysis, session-local workbench views (tasks and a notepad), and memory recall. The inference stage is the call to the model API, where the model is given the perception to reason about. The action stage is where the agent takes the output of the model, such as tool calls, and actually runs them.
+1. Experimentation and benchmarking of model capabilities
+2. Understanding and learning about agentic system paradigms
+3. Porting and extending a simple baseline for domain-specific operations
 
 ## Architecture
 
-The organization separates agent behavior from application wiring:
-
-- `agent/` owns lifecycle and control: the perception → inference → action loop, environment updates, waiting/resuming, and tool orchestration. `agent/tokens.py` keeps a trailing context window within configured model/input boundaries without compaction; see [context and cost policies](documentation/llm-adapters.md).
-- `workbenches/` owns session-local tasks and notepad state, tools, and perception views. See [Adding a workbench](documentation/adding-a-workbench.md).
-- `memory/` owns durable memory. `memory/engine.py` owns recall, prompt formatting, and memory tools; service contracts and backends live alongside it.
-- `roles/` defines role identities, prompt guidance, and tool selections. `tools/` defines shared tool contracts, registration, execution policies, and capability libraries.
-- `application/` assembles the runtime and owns its CLI-facing concerns and shared event transport (`application/events.py`). `application/cli.py` contains the existing CLI implementation and runtime wiring; the root `simple-agent.py` is a thin launcher that uses `runpy` to execute `application.cli`. `application/config.py` loads configuration; `application/terminal.py`, `application/cli_input.py`, and `application/runlog.py` provide presentation, interactive input/approval, and session logging.
-- `llms/`, `embeddings/`, and `storage/` remain unchanged: chat-provider adapters, independent embedding adapters, and shared database lifecycle/migrations, respectively.
+Klank's architecture and development are detailed in the [ARCHITECTURE](./ARCHITECTURE.md) document.
 
 ## Prerequisites
 
-To make Simon work well, you'll need to meet the following prerequisites:
+To make Klank work well, you'll need to meet the following prerequisites:
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) (follow the official installation instructions)
 - Access to an LLM provider: OpenAI, Anthropic, or Google Gemini
@@ -54,13 +39,13 @@ Use uv to install dependencies and run the agent. It manages Python 3.12 and the
 1. Start by cloning the repository (or forking if you want to extend it a lot):
 
 ```bash
-   git clone https://github.com/AidanTilgner/Simon.git
+   git clone https://github.com/AidanTilgner/Simon.git Klank
 ```
 
 2. Then, navigate into the directory:
 
 ```bash
-cd Simon
+cd Klank
 ```
 
 3. Install the dependencies:
@@ -98,7 +83,7 @@ for accounting behavior and migration from `MAX_TOKENS` / `MAX_MESSAGE_LENGTH`.
 5. Run the program (no environment activation needed):
 
 ```bash
-uv run python simon.py
+uv run python klank.py
 ```
 
 6. To exit the program, you can use `Ctrl+C`, or type "exit".
@@ -106,7 +91,7 @@ uv run python simon.py
 That's it! You should see the agent start up, and you can ask it to do things using it's tools.
 
 Select a different file with `--config path/to/config.toml`. After syncing
-dependencies, `uv run --no-sync python simon.py` skips uv's environment
+dependencies, `uv run --no-sync python klank.py` skips uv's environment
 reconciliation on subsequent launches. This also avoids repeated reinstall noise
 from the current `sqlite-vss` wheel metadata mismatch.
 
@@ -132,7 +117,7 @@ uv run python -m unittest discover -s tests -v
 
 ### Logs
 
-The CLI prints the logging directory at startup (default `simon-logs/`).
+The CLI prints the logging directory at startup (default `klank-logs/`).
 `last_thread.md` contains the conversation, `toolbox.log` records tool arguments
 and results, `agent.log` contains history snapshots, and `errors.log` records
 failures. `usage.jsonl` records every inference attempt and `events.jsonl` traces
@@ -178,9 +163,9 @@ Roles focus working practices rather than enforcing permissions, and the agent c
 
 ## Adding Memory
 
-Check out [the tutorial](/documentation/adding-memory.md) to learn how to add memory to Simon. This isn't necessary for the agent to work, however allows its memory to persist between sessions.
+Check out [the tutorial](/documentation/adding-memory.md) to learn how to add memory to Klank. This isn't necessary for the agent to work, however allows its memory to persist between sessions.
 
-Built-in memory runs in-process using the shared application SQLite database and OpenAI embeddings. Set `[memory] backend = "local"` and the OpenAI key in `config.toml` to enable it. Add `directory = "memories"` under `[memory]` for an editable Markdown view: startup imports file edits, agent writes are mirrored, and `uv run simple-agent.py --sync-memory` synchronizes manually without starting chat. Embedding providers are independent of chat models. Custom memory integrations implement the same `MemoryService` interface and register their own factory.
+Built-in memory runs in-process using the shared application SQLite database and OpenAI embeddings. Set `[memory] backend = "local"` and the OpenAI key in `config.toml` to enable it. Add `directory = "memories"` under `[memory]` for an editable Markdown view: startup imports file edits, agent writes are mirrored, and `uv run klank.py --sync-memory` synchronizes manually without starting chat. Embedding providers are independent of chat models. Custom memory integrations implement the same `MemoryService` interface and register their own factory.
 
 ## Roadmap
 

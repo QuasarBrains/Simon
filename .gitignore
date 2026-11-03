@@ -6,6 +6,7 @@ venv/
 .uv-cache/
 .uv-python/
 simon-logs/
+klank-logs/
 __pycache__/
 agent.thread
 agent.log

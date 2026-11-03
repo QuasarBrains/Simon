@@ -839,7 +839,7 @@ wheels = [
 ]
 
 [[package]]
-name = "simon"
+name = "klank"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [

@@ -9,6 +9,7 @@ from dotenv import dotenv_values
 from pydantic import Field, PrivateAttr, ValidationError
 
 from llms.config import LLMConfig, Settings
+from storage.database import Database
 
 
 class ConfigurationError(ValueError):
@@ -16,14 +17,14 @@ class ConfigurationError(ValueError):
 
 
 class AppSettings(Settings):
-    log_directory: str = Field(default="simon-logs", min_length=1)
+    log_directory: str = Field(default="klank-logs", min_length=1)
     verbose: bool = False
     silence_actions: bool = False
 
 
 class MemorySettings(Settings):
     backend: str = "none"
-    database_path: str = "datastore/simon.sqlite3"
+    database_path: str = Field(default_factory=Database.default_path)
     directory: str = ""
     namespace: str = "default"
     recall_limit: int = Field(default=3, ge=1, le=100)

@@ -285,9 +285,6 @@ class Agent:
         return True
 
     def percieve(self):
-        """
-        This is where the perception of the environment will be generated.
-        """
         sections = [self.environment.get_environment()]
         for workbench in self.workbenches:
             view = workbench.build_view()
@@ -296,9 +293,6 @@ class Agent:
         return "\n\n".join(section for section in sections if section)
 
     def remember(self):
-        """
-        This is where the memory of the agent will be queried.
-        """
         return self.memory.get_memory()
 
     def build_prompt(self):

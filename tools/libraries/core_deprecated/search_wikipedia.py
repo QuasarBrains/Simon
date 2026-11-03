@@ -6,7 +6,7 @@ from application.events import PubSub
 from tools.index import Tool
 
 client = wikipediaapi.Wikipedia(
-    user_agent="Simon-Agent/0.1 (https://github.com/QuasarBrains/Simon)",
+    user_agent="Klank-Agent/0.1 (https://github.com/QuasarBrains/Simon)",
     language="en",
 )
 

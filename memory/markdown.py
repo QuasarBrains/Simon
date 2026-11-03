@@ -181,7 +181,12 @@ class MarkdownMemoryService:
         return self._sync()
 
     def _root(self):
-        marker = self.directory / ".simon-memory.json"
+        marker = self.directory / ".klank-memory.json"
+        legacy_marker = self.directory / ".simon-memory.json"
+        if not (marker.exists() or marker.is_symlink()) and (
+            legacy_marker.exists() or legacy_marker.is_symlink()
+        ):
+            marker = legacy_marker
         with self.service.database.connect() as connection:
             row = connection.execute(
                 "SELECT * FROM memory_sync_roots WHERE directory=?",

@@ -11,11 +11,19 @@ class Database:
     def __init__(self, path: str | Path):
         self.path = Path(path).expanduser().resolve()
 
+    @staticmethod
+    def default_path() -> str:
+        directory = Path(__file__).resolve().parent.parent / "datastore"
+        if (
+            not (directory / "klank.sqlite3").exists()
+            and (directory / "simon.sqlite3").is_file()
+        ):
+            return "datastore/simon.sqlite3"
+        return "datastore/klank.sqlite3"
+
     @classmethod
     def from_config(cls, config: Mapping[str, str]) -> "Database":
-        path = Path(
-            config.get("DATABASE_PATH") or "datastore/simon.sqlite3"
-        ).expanduser()
+        path = Path(config.get("DATABASE_PATH") or cls.default_path()).expanduser()
         if not path.is_absolute():
             path = Path(__file__).resolve().parent.parent / path
         return cls(path)

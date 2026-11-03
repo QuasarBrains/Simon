@@ -1,6 +1,6 @@
 # Memory
 
-Simon has an optional built-in memory service. It stores memories in the shared application SQLite database and searches embeddings in-process with `sqlite-vss`. Custom integrations implement the same small `MemoryService` contract.
+Klank has an optional built-in memory service. It stores memories in the shared application SQLite database and searches embeddings in-process with `sqlite-vss`. Custom integrations implement the same small `MemoryService` contract.
 
 ## Enable built-in memory
 
@@ -12,7 +12,7 @@ api_key = "your-key"
 
 [memory]
 backend = "local"
-database_path = "datastore/simon.sqlite3"
+database_path = "datastore/klank.sqlite3"
 directory = "memories" # Optional editable Markdown directory
 embedding_provider = "openai"
 embedding_model = "text-embedding-3-small"
@@ -20,7 +20,7 @@ recall_limit = 3
 context_token_budget = 1000
 ```
 
-Run `uv run simon.py`. Ask the agent to remember something using its `memory.add` tool. Memories survive restarts and are recalled before inference. The chat provider can be OpenAI, Anthropic, or Google independently of the embedding provider.
+Run `uv run klank.py`. Ask the agent to remember something using its `memory.add` tool. Memories survive restarts and are recalled before inference. The chat provider can be OpenAI, Anthropic, or Google independently of the embedding provider.
 
 ## Editable Markdown directory
 
@@ -29,9 +29,9 @@ Set `[memory] directory = "memories"` to synchronize one recursive directory wit
 Synchronization runs at startup. Agent/programmatic add, update, and remove operations also mirror the affected record immediately. To import edits while the agent is running, or retry pending writes, run:
 
 ```bash
-uv run simon.py --sync-memory
+uv run klank.py --sync-memory
 # With a particular configuration:
-uv run simpon.py --config /path/to/config.toml --sync-memory
+uv run klank.py --config /path/to/config.toml --sync-memory
 ```
 
 This command starts no chat session and makes no chat-model request. New or changed title/content still needs the configured embedding provider. Exit status is `0` for a clean sync and `1` when conflicts/errors need attention. The startup report and command output show import/update/export/removal counts and per-file issues. There is no automatic directory watcher in this version.
@@ -67,7 +67,7 @@ SQLite remains the operational source of truth. Sync stores the last synchronize
 - A database-only change updates its file.
 - If both changed differently, the source file is preserved and a database snapshot is written under `.memory-conflicts/`. That folder is excluded from imports. To choose the database version, copy the snapshot over the source and sync. To choose the file version, apply its values through the ordinary memory update API/tool and sync; once both agree, the conflict clears.
 - Removing a previously synchronized file from an intact directory soft-removes that memory from recall. If the database record also changed, deletion becomes a conflict instead. Invalid/incomplete scans defer missing-file deletions.
-- A directory identity marker, `.simon-memory.json`, distinguishes an available directory from a missing/replaced one. If a previously initialized directory or marker disappears, sync makes no deletion decisions. Restore the directory/marker rather than replacing it with an empty folder. After a database reset, an orphaned directory containing only the marker and sync lock can be rebound automatically and populated from SQLite. An unbound marked directory containing other files is rejected rather than overwritten.
+- A directory identity marker, `.klank-memory.json`, distinguishes an available directory from a missing/replaced one. Existing legacy `.simon-memory.json` markers are also recognized. If a previously initialized directory or marker disappears, sync makes no deletion decisions. Restore the directory/marker rather than replacing it with an empty folder. After a database reset, an orphaned directory containing only the marker and sync lock can be rebound automatically and populated from SQLite. An unbound marked directory containing other files is rejected rather than overwritten.
 - Agent removals write a `removed_at` tombstone into the existing file. Reintroducing an old copy or deleting the tombstone field does not resurrect a retired memory; it is reported as a conflict. A deliberately deleted file stays deleted after retirement.
 
 Direct file edits/deletions are the user/programmatic editing interface and are applied during startup/manual sync; they do not invoke agent-tool approval. The agent's `memory.remove` tool continues to require approval.
@@ -123,7 +123,7 @@ Custom services expose only capabilities they implement. Add/search-only adapter
 
 Memory is a core agent module. `memory/engine.py` owns recall, domain operations, tool schemas, descriptions, and structured result formatting. The harness registers `MemoryEngine.get_tools()` once per agent as shared tools across roles, rather than composing memory into role capability libraries. Tools use the current `Tool`/`ToolResult` interface, canonical `memory.*` names, schema defaults, and the registry approval policy for removal. Disabled memory exposes no tools; available operations follow the configured service's capabilities. Persistence and embeddings stay behind the memory service.
 
-Relative database paths resolve against the Simon project root. The database and parent directories are created on first startup. `datastore/` is ignored by Git. This database is application storage: future modules can add their own tables through `storage.database.Database` and named transactional migrations.
+Relative database paths resolve against the Klank project root. The database and parent directories are created on first startup. `datastore/` is ignored by Git. This database is application storage: future modules can add their own tables through `storage.database.Database` and named transactional migrations.
 
 Other modules can use `Database.from_config(config)` to resolve the same application database, then apply their own named migrations within `with database.connect() as connection:`. Plain database connections do not load vector extensions; vector consumers opt in with `connect(vectors=True)`.
 
@@ -140,7 +140,7 @@ are still accepted as environment overrides or `.env` fallbacks.
 | Variable                      | Default / behavior                                                                                                                           |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MEMORY_BACKEND`              | `local` (built-in SQLite), `none`, or a registered custom factory name. Blank/unset means `none`.                                            |
-| `DATABASE_PATH`               | `datastore/simon.sqlite3`; shared application database path.                                                                                 |
+| `DATABASE_PATH`               | `datastore/klank.sqlite3`; shared application database path.                                                                                 |
 | `MEMORY_DIRECTORY`            | Blank by default; `[memory] directory` enables recursive Markdown synchronization for the local backend.                                     |
 | `EMBEDDING_PROVIDER`          | `openai`; independent adapter selection.                                                                                                     |
 | `EMBEDDING_MODEL`             | `text-embedding-3-small`.                                                                                                                    |

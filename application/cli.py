@@ -23,7 +23,7 @@ from tools.index import Toolbox
 
 verbose = False
 silence_actions = False
-log_directory = "simon-logs"
+log_directory = "klank-logs"
 
 script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 system_prompt_path = os.path.join(script_dir, "system_prompt.md")
@@ -94,7 +94,7 @@ def handle_logs():
 
 def on_user_input(user_input: str):
     if user_input.strip().lower() == "exit":
-        console.print("[blue bold]Simon:[/blue bold] Goodbye!")
+        console.print("[blue bold]Klank:[/blue bold] Goodbye!")
         PUBSUB.publish("exit_signal", "User exit")
         return
     write_to_file(os.path.join(log_directory, "last_thread.md"), f"User: {user_input}")
@@ -151,7 +151,7 @@ PUBSUB.subscribe("agent.resumed", on_agent_resumed)
 PUBSUB.subscribe("exit_signal", handle_exit)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the Simon chatbot.")
+    parser = argparse.ArgumentParser(description="Run the Klank chatbot.")
     parser.add_argument(
         "--llm", choices=LLM_CHOICES, help="Override the configured LLM provider."
     )
@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
     console.print(
         Text.assemble(
-            ("\nSimon  ", "bold blue"), (f"{llm_choice} / {LLM.model_name}", "dim")
+            ("\nKlank  ", "bold blue"), (f"{llm_choice} / {LLM.model_name}", "dim")
         )
     )
     console.print(Text(f"Logs  {RUN_LOGGER.directory.resolve()}", style="dim"))

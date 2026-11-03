@@ -1,5 +1,5 @@
 [project]
-name = "simon"
+name = "klank"
 version = "1.0.0"
 description = "An experimental command-line LLM agent with roles, tools, and optional memory."
 readme = "Readme.md"

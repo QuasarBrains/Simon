@@ -4,7 +4,6 @@ import asyncio
 import json
 from contextlib import contextmanager
 
-from application.lib.formatting import dollars
 from prompt_toolkit import HTML, PromptSession
 from prompt_toolkit.validation import Validator
 from rich.console import Console
@@ -12,6 +11,8 @@ from rich.markdown import Markdown
 from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.text import Text
+
+from application.lib.formatting import dollars
 
 console = Console(highlight=False)
 
@@ -120,7 +121,7 @@ class Terminal:
 
     def message(self, message: str):
         self.console.print()
-        self.console.print("Simon", style="bold blue")
+        self.console.print("Klank", style="bold blue")
         self.console.print(Markdown(message))
 
 
