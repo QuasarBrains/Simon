@@ -2,28 +2,29 @@
 
 import argparse
 import os
-import signal
 from dataclasses import asdict
 from pathlib import Path
-from threading import current_thread
 from typing import Optional
 
+from rich.console import Console
 from rich.text import Text
 
 from agent.agent import Agent
-from application.cli_input import CLIInput
+from application.approval import ApprovalBroker
 from application.config import load_config
 from application.events import PubSub
 from application.runlog import SessionLogger
-from application.terminal import console, terminal
+from application.tui import SprocketApp
 from llms.llm import create_llm
 from memory.config import create_memory_service
 from memory.service import MemoryService, SynchronizableMemoryService
 from tools.index import Toolbox
 
+console = Console(highlight=False)
+
 verbose = False
 silence_actions = False
-log_directory = "klank-logs"
+log_directory = "sprocket-logs"
 
 script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 system_prompt_path = os.path.join(script_dir, "system_prompt.md")
@@ -44,18 +45,14 @@ RUN_LOGGER: Optional[SessionLogger] = None
 
 agent: Optional[Agent] = None
 PUBSUB = PubSub()
-CLI_INPUT = CLIInput(
-    waiting=lambda mode: agent is not None and agent.waiting_for == mode,
-    on_close=lambda: agent.stop() if agent is not None else None,
-)
-TOOLBOX = Toolbox(pubsub=PUBSUB, approve=CLI_INPUT.approve)
+APPROVALS = ApprovalBroker()
+TOOLBOX = Toolbox(pubsub=PUBSUB, approve=APPROVALS.approve)
 
 
 def handle_errors():
     def report(message, kind):
         RUN_LOGGER.text("errors.log", str(message))
         RUN_LOGGER.event(kind, {"message": str(message)})
-        console.print(Text.assemble(("Agent Error: ", "red"), str(message)))
 
     PUBSUB.subscribe("error", lambda error: report(error, "error"))
     PUBSUB.subscribe("agent_error", lambda error: report(error, "agent.error"))
@@ -78,80 +75,51 @@ def handle_logs():
     def toolbox_log(log: str):
         write_to_file(os.path.join(log_directory, "toolbox.log"), log)
 
+    def agent_message(message: str):
+        write_to_file(os.path.join(log_directory, "last_thread.md"), f"Agent: {message}")
+
+    def agent_perception(perception: str):
+        write_to_file(
+            os.path.join(log_directory, "last_thread.md"), f"Perception:\n{perception}\n"
+        )
+
     PUBSUB.subscribe("agent_log", agent_log)
     PUBSUB.subscribe("general_log", general_log)
     PUBSUB.subscribe("toolbox_log", toolbox_log)
+    PUBSUB.subscribe("new_agent_message", agent_message)
+    PUBSUB.subscribe("new_agent_prompt", agent_message)
+    PUBSUB.subscribe("new_agent_perception", agent_perception)
     for name in (
         "tool.started",
         "tool.finished",
         "tool.approval",
         "agent.waiting",
         "agent.resumed",
+        "agent.thinking",
         "agent.context_trimmed",
     ):
         PUBSUB.subscribe(name, lambda data, event=name: RUN_LOGGER.event(event, data))
 
 
-def on_user_input(user_input: str):
-    if user_input.strip().lower() == "exit":
-        console.print("[blue bold]Klank:[/blue bold] Goodbye!")
-        PUBSUB.publish("exit_signal", "User exit")
-        return
+def submit_user_message(user_input: str):
     write_to_file(os.path.join(log_directory, "last_thread.md"), f"User: {user_input}")
     PUBSUB.publish("new_user_message", user_input)
 
 
-def on_new_agent_message(message: str):
-    terminal.message(message)
-    write_to_file(os.path.join(log_directory, "last_thread.md"), f"Agent: {message}")
-
-
-def on_new_agent_message_with_prompt(message: str):
-    on_new_agent_message(message)
-
-
-def on_agent_waiting(data: dict):
-    CLI_INPUT.submit_user(data["mode"])
-
-
-def on_agent_resumed(data: dict):
-    CLI_INPUT.cancel_user()
-
-
-def on_new_agent_perception(perception: str):
-    write_to_file(
-        os.path.join(log_directory, "last_thread.md"), f"Perception:\n{perception}\n"
-    )
-
-
-def handle_exit(m: str):
-    if agent is not None:
-        agent.stop()
-    CLI_INPUT.close()
-
-
-def signal_handler(sig, frame):
-    console.print("\nReceived exit signal, shutting down...")
-    raise KeyboardInterrupt
-
-
-def show_memory_sync(service):
-    if isinstance(service, SynchronizableMemoryService):
-        report = service.last_sync_report
+def show_memory_sync(service, *, print_report: bool = True) -> list[str]:
+    if not isinstance(service, SynchronizableMemoryService):
+        return []
+    report = service.last_sync_report
+    notices = [f"Memory sync · {report.directory}", report.summary()]
+    notices.extend(f"Warning · {issue}" for issue in report.conflicts + report.errors)
+    if print_report:
         console.print(Text(f"{report.directory}\n{report.summary()}", style="dim"))
         for issue in report.conflicts + report.errors:
             console.print(Text(issue, style="yellow"))
-
-
-PUBSUB.subscribe("new_agent_message", on_new_agent_message)
-PUBSUB.subscribe("new_agent_prompt", on_new_agent_message_with_prompt)
-PUBSUB.subscribe("new_agent_perception", on_new_agent_perception)
-PUBSUB.subscribe("agent.waiting", on_agent_waiting)
-PUBSUB.subscribe("agent.resumed", on_agent_resumed)
-PUBSUB.subscribe("exit_signal", handle_exit)
+    return notices
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the Klank chatbot.")
+    parser = argparse.ArgumentParser(description="Run the Sprocket chatbot.")
     parser.add_argument(
         "--llm", choices=LLM_CHOICES, help="Override the configured LLM provider."
     )
@@ -168,6 +136,13 @@ if __name__ == "__main__":
         "--clear-logs",
         action="store_true",
         help="Explicitly clear existing application logs before starting.",
+    )
+    parser.add_argument(
+        "--show-startup-details",
+        action="store_true",
+        help=(
+            "Show detailed startup metadata in the chat instead of a compact one-line summary."
+        ),
     )
     parser.add_argument(
         "--config",
@@ -248,27 +223,26 @@ if __name__ == "__main__":
 
     def log_llm_event(name, data):
         RUN_LOGGER.event(name, data)
-        if name == "llm.retry":
-            console.print(
-                f"Output limit reached; retrying with {data['max_output_tokens']:,} tokens (subject to budget).",
-                style="dim",
-            )
+        PUBSUB.publish(name, data)
 
     LLM.on_usage = log_usage
     LLM.on_event = log_llm_event
     handle_errors()
     handle_logs()
-    terminal.tracker = LLM.tracker
+    startup_notices = [f"Logs · {RUN_LOGGER.directory.resolve()}"]
+    startup_summary_parts = [f"Logs · {Path(log_directory).name}"]
     if config.legacy_settings:
-        console.print(
-            "Config  Legacy settings loaded; see config.example.toml to migrate to one file.",
-            style="dim",
+        startup_notices.append(
+            "Config · Legacy settings loaded; see config.example.toml to migrate to one file."
         )
+        startup_summary_parts.append("Legacy config")
     if (llm_choice, LLM.model_name) not in LLM.tracker.pricing:
-        console.print(
-            "Pricing  Add this model's rates in [[llm.pricing]] for dollar totals; token totals are available now.",
-            style="dim",
+        startup_notices.append(
+            "Pricing · Add this model's rates in [[llm.pricing]] for dollar totals; token totals are available now."
         )
+        startup_summary_parts.append("Pricing · rates missing")
+    else:
+        startup_summary_parts.append("Pricing · configured")
 
     try:
         recall_limit = config.memory.recall_limit
@@ -276,9 +250,15 @@ if __name__ == "__main__":
         MEMORY_SERVICE = create_memory_service(config.memory_options())
         if MEMORY_SERVICE is not None:
             MEMORY_SERVICE.startup()
-            show_memory_sync(MEMORY_SERVICE)
+            startup_notices.extend(show_memory_sync(MEMORY_SERVICE, print_report=False))
             if isinstance(MEMORY_SERVICE, SynchronizableMemoryService):
-                RUN_LOGGER.event("memory.sync", asdict(MEMORY_SERVICE.last_sync_report))
+                report = MEMORY_SERVICE.last_sync_report
+                startup_summary_parts.append(
+                    "Markdown memory · sync needs attention"
+                    if report.pending
+                    else "Markdown memory · synced"
+                )
+                RUN_LOGGER.event("memory.sync", asdict(report))
     except Exception as error:
         RUN_LOGGER.text("errors.log", f"Memory startup failed: {error}")
         RUN_LOGGER.event("startup.error", {"message": str(error)})
@@ -294,13 +274,6 @@ if __name__ == "__main__":
         else args.silence_actions
     )
 
-    console.print(
-        Text.assemble(
-            ("\nKlank  ", "bold blue"), (f"{llm_choice} / {LLM.model_name}", "dim")
-        )
-    )
-    console.print(Text(f"Logs  {RUN_LOGGER.directory.resolve()}", style="dim"))
-
     agent = Agent(
         pubsub=PUBSUB,
         llm=LLM,
@@ -312,19 +285,28 @@ if __name__ == "__main__":
         memory_token_budget=memory_token_budget,
     )
     try:
-        signal.signal(signal.SIGINT, signal_handler)
-        agent.start()
-        CLI_INPUT.submit_user("stimulus", initial=True)
-        CLI_INPUT.run(lambda: agent.running, on_user_input)
-    except (EOFError, KeyboardInterrupt):
+        SprocketApp(
+            pubsub=PUBSUB,
+            agent=agent,
+            approvals=APPROVALS,
+            provider=llm_choice,
+            model=LLM.model_name,
+            tracker=LLM.tracker,
+            on_user_message=submit_user_message,
+            show_actions=not silence_actions,
+            verbose=verbose,
+            startup_notices=startup_notices,
+            startup_summary="  ·  ".join(startup_summary_parts),
+            show_startup_details=args.show_startup_details,
+        ).run()
+    except KeyboardInterrupt:
         pass
     finally:
         agent.stop()
-        CLI_INPUT.close()
-        if agent.thread is not current_thread() and agent.thread.is_alive():
+        APPROVALS.close()
+        if agent.thread.is_alive():
             agent.thread.join()
         if MEMORY_SERVICE is not None:
             MEMORY_SERVICE.close()
         RUN_LOGGER.event("session.end", {"summary": LLM.tracker.summary()})
         LLM.close()
-    console.print("Shutting down...")

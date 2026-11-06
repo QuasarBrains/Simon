@@ -7,6 +7,7 @@ venv/
 .uv-python/
 simon-logs/
 klank-logs/
+sprocket-logs/
 __pycache__/
 agent.thread
 agent.log

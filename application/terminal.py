@@ -121,7 +121,7 @@ class Terminal:
 
     def message(self, message: str):
         self.console.print()
-        self.console.print("Klank", style="bold blue")
+        self.console.print("Sprocket", style="bold blue")
         self.console.print(Markdown(message))
 
 

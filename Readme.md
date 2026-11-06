@@ -1,18 +1,18 @@
-# Klank
+# Sprocket
 
 See the [changelog](CHANGELOG.md) for notable changes and migration notes.
 
 > [!warning]
-> Klank can run commands on your machine. Be aware of the potential for it to make modifications to your system.
+> Sprocket can run commands on your machine. Be aware of the potential for it to make modifications to your system.
 
 2024 Baseline (legacy Simple Agent):
 ![Aug-16-2024 11-27-09](https://github.com/user-attachments/assets/3bb43a56-0501-4759-b3b0-ac459f53f692)
 
-2026 Update (Klank v0.2.1):
+2026 Update (Sprocket v0.2.1):
 
-Klank exists as a baseline agent architecture built to be extended, modified, and tinkered with. This means that tradeoffs are made in favor of extensibility and approachability of the codebase, not necessarily pure functionality. Out-of-the-box utility is favored, with minimal reliance on external systems. Where there are third-party dependencies (such as inference providers), agnostic interfaces are favored to allow easy porting between options. Klank is designed to be simple but effective, learn more about its [architecture](./ARCHITECTURE.md).
+Sprocket exists as a baseline agent architecture built to be extended, modified, and tinkered with. This means that tradeoffs are made in favor of extensibility and approachability of the codebase, not necessarily pure functionality. Out-of-the-box utility is favored, with minimal reliance on external systems. Where there are third-party dependencies (such as inference providers), agnostic interfaces are favored to allow easy porting between options. Sprocket is designed to be simple but effective, learn more about its [architecture](./ARCHITECTURE.md).
 
-Intended use-cases of Klank include:
+Intended use-cases of Sprocket include:
 
 1. Experimentation and benchmarking of model capabilities
 2. Understanding and learning about agentic system paradigms
@@ -20,11 +20,11 @@ Intended use-cases of Klank include:
 
 ## Architecture
 
-Klank's architecture and development are detailed in the [ARCHITECTURE](./ARCHITECTURE.md) document.
+Sprocket's architecture and development are detailed in the [ARCHITECTURE](./ARCHITECTURE.md) document.
 
 ## Prerequisites
 
-To make Klank work well, you'll need to meet the following prerequisites:
+To make Sprocket work well, you'll need to meet the following prerequisites:
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) (follow the official installation instructions)
 - Access to an LLM provider: OpenAI, Anthropic, or Google Gemini
@@ -39,13 +39,13 @@ Use uv to install dependencies and run the agent. It manages Python 3.12 and the
 1. Start by cloning the repository (or forking if you want to extend it a lot):
 
 ```bash
-   git clone https://github.com/AidanTilgner/Simon.git Klank
+   git clone https://github.com/AidanTilgner/Simon.git Sprocket
 ```
 
 2. Then, navigate into the directory:
 
 ```bash
-cd Klank
+cd Sprocket
 ```
 
 3. Install the dependencies:
@@ -83,7 +83,7 @@ for accounting behavior and migration from `MAX_TOKENS` / `MAX_MESSAGE_LENGTH`.
 5. Run the program (no environment activation needed):
 
 ```bash
-uv run python klank.py
+uv run python sprocket.py
 ```
 
 6. To exit the program, you can use `Ctrl+C`, or type "exit".
@@ -91,7 +91,7 @@ uv run python klank.py
 That's it! You should see the agent start up, and you can ask it to do things using it's tools.
 
 Select a different file with `--config path/to/config.toml`. After syncing
-dependencies, `uv run --no-sync python klank.py` skips uv's environment
+dependencies, `uv run --no-sync python sprocket.py` skips uv's environment
 reconciliation on subsequent launches. This also avoids repeated reinstall noise
 from the current `sqlite-vss` wheel metadata mismatch.
 
@@ -117,9 +117,11 @@ uv run python -m unittest discover -s tests -v
 
 ### Logs
 
-The CLI prints the logging directory at startup (default `klank-logs/`).
-`last_thread.md` contains the conversation, `toolbox.log` records tool arguments
-and results, `agent.log` contains history snapshots, and `errors.log` records
+The TUI shows a compact one-line startup metadata summary by default. Pass
+`--show-startup-details` to show the full log path, pricing guidance, and Markdown
+memory sync details as separate chat entries. The log directory defaults to
+`sprocket-logs/`; `last_thread.md` contains the conversation, `toolbox.log` records
+tool arguments and results, `agent.log` contains history snapshots, and `errors.log` records
 failures. `usage.jsonl` records every inference attempt and `events.jsonl` traces
 requests, output-limit retries, tools, and errors using session/request IDs.
 Logs append across launches; use `--clear-logs` only when you want to clear them.
@@ -163,9 +165,9 @@ Roles focus working practices rather than enforcing permissions, and the agent c
 
 ## Adding Memory
 
-Check out [the tutorial](/documentation/adding-memory.md) to learn how to add memory to Klank. This isn't necessary for the agent to work, however allows its memory to persist between sessions.
+Check out [the tutorial](/documentation/adding-memory.md) to learn how to add memory to Sprocket. This isn't necessary for the agent to work, however allows its memory to persist between sessions.
 
-Built-in memory runs in-process using the shared application SQLite database and OpenAI embeddings. Set `[memory] backend = "local"` and the OpenAI key in `config.toml` to enable it. Add `directory = "memories"` under `[memory]` for an editable Markdown view: startup imports file edits, agent writes are mirrored, and `uv run klank.py --sync-memory` synchronizes manually without starting chat. Embedding providers are independent of chat models. Custom memory integrations implement the same `MemoryService` interface and register their own factory.
+Built-in memory runs in-process using the shared application SQLite database and OpenAI embeddings. Set `[memory] backend = "local"` and the OpenAI key in `config.toml` to enable it. Add `directory = "memories"` under `[memory]` for an editable Markdown view: startup imports file edits, agent writes are mirrored, and `uv run sprocket.py --sync-memory` synchronizes manually without starting chat. Embedding providers are independent of chat models. Custom memory integrations implement the same `MemoryService` interface and register their own factory.
 
 ## Roadmap
 

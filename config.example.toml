@@ -5,7 +5,7 @@
 # To enforce caps, add exact provider/model prices below and uncomment budgets.
 
 [app]
-log_directory = "klank-logs"
+log_directory = "sprocket-logs"
 verbose = false
 silence_actions = false
 
@@ -75,7 +75,7 @@ timeout_seconds = 120
 
 [memory]
 backend = "none"                          # none, local, or a registered custom backend
-database_path = "datastore/klank.sqlite3"
+database_path = "datastore/sprocket.sqlite3"
 # directory = "memories" # Optional recursive Markdown view; startup/manual sync and agent-write mirroring
 recall_limit = 3
 context_token_budget = 1000

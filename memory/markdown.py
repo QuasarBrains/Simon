@@ -43,11 +43,32 @@ class Document:
     file_hash: str
     memory_id: int | None
     draft: MemoryDraft
-    removed: bool
+    removed_at: str | None
+    canonical_hash: str
+
+    @property
+    def removed(self) -> bool:
+        return self.removed_at is not None
+
+
+def document_hash(document: Document, memory_id: int | str) -> str:
+    return memory_hash(
+        Memory(
+            id=memory_id,
+            **asdict(document.draft),
+            removed_at=document.removed_at,
+        )
+    )
 
 
 def parse_document(path: str, data: bytes) -> Document:
-    post = frontmatter.loads(data.decode("utf-8-sig"))
+    post = frontmatter.loads(data.decode("utf-8-sig").replace("\r\n", "\n"))
+    canonical = frontmatter.Post(post.content)
+    canonical.metadata = dict(post.metadata)
+    for name in ("created_at", "updated_at", "removed_at"):
+        if isinstance(canonical.get(name), date):
+            canonical[name] = canonical[name].isoformat()
+    canonical_hash = digest((frontmatter.dumps(canonical) + "\n").encode())
     body = post.content.strip()
     heading = re.match(r"\A#\s+([^\n]+)(?:\n|$)", body)
     title = post.get("title") or (
@@ -110,7 +131,8 @@ def parse_document(path: str, data: bytes) -> Document:
             namespace,
             metadata,
         ),
-        removed_at is not None,
+        removed_at.isoformat() if isinstance(removed_at, date) else removed_at,
+        canonical_hash,
     )
 
 
@@ -181,12 +203,13 @@ class MarkdownMemoryService:
         return self._sync()
 
     def _root(self):
-        marker = self.directory / ".klank-memory.json"
-        legacy_marker = self.directory / ".simon-memory.json"
-        if not (marker.exists() or marker.is_symlink()) and (
-            legacy_marker.exists() or legacy_marker.is_symlink()
-        ):
-            marker = legacy_marker
+        marker = self.directory / ".sprocket-memory.json"
+        for name in (".klank-memory.json", ".simon-memory.json"):
+            if marker.exists() or marker.is_symlink():
+                break
+            legacy_marker = self.directory / name
+            if legacy_marker.exists() or legacy_marker.is_symlink():
+                marker = legacy_marker
         with self.service.database.connect() as connection:
             row = connection.execute(
                 "SELECT * FROM memory_sync_roots WHERE directory=?",
@@ -400,7 +423,12 @@ class MarkdownMemoryService:
             return
         database_changed = state is None or state["memory_hash"] != current_hash
         file_changed = document is not None and (
-            state is None or state["file_hash"] != document.file_hash
+            state is None
+            or (
+                state["file_hash"] != document.file_hash
+                and state["file_hash"] != document.canonical_hash
+                and state["memory_hash"] != document_hash(document, memory.id)
+            )
         )
         if memory.removed_at is not None:
             if document is None:

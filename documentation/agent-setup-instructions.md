@@ -1,13 +1,13 @@
 # Agent setup instructions
 
-Give these instructions to a coding agent with terminal and repository access to configure a fresh Klank instance. The agent can install dependencies, prepare configuration, and run offline checks. A human supplies secrets and authorizes any live API test.
+Give these instructions to a coding agent with terminal and repository access to configure a fresh Sprocket instance. The agent can install dependencies, prepare configuration, and run offline checks. A human supplies secrets and authorizes any live API test.
 
 ## Goal and boundaries
 
 Prepare an instance that a human can start with:
 
 ```sh
-uv run python klank.py
+uv run python sprocket.py
 ```
 
 - Never request, generate, display, or commit API keys. Do not ask a human to paste secrets into the conversation.
@@ -27,8 +27,8 @@ git --no-optional-locks status --short
 For a new checkout, clone into the human's chosen workspace:
 
 ```sh
-git clone https://github.com/AidanTilgner/Simon.git Klank
-cd Klank
+git clone https://github.com/AidanTilgner/Simon.git Sprocket
+cd Sprocket
 ```
 
 Run the remaining commands from the repository root. When using an agent terminal tool with a working-directory argument, set that argument instead of embedding `cd` in a command.
@@ -112,7 +112,7 @@ Do not set up a vector store for the basic smoke test. Persistent memory require
 ## 5. Run checks without credentials or LLM calls
 
 ```sh
-uv run --locked python klank.py --help
+uv run --locked python sprocket.py --help
 uv run --locked python -m unittest discover -s tests -v
 uv pip check --python .venv/bin/python
 ```
@@ -141,13 +141,13 @@ Report what was configured, which checks passed, and what remains for the human.
 The instance can now be started with:
 
 ```sh
-uv run python klank.py
+uv run python sprocket.py
 ```
 
 For an explicit provider override:
 
 ```sh
-uv run python klank.py --llm openai
+uv run python sprocket.py --llm openai
 ```
 
 `--llm` overrides `MODEL_CHOICE`; it does not replace the corresponding API key or model settings.

@@ -4,9 +4,9 @@ Status: built-in add/search, partial updates, approval-gated soft removal, and o
 
 ## Motivation
 
-The original external vector-store setup worked well for memory, but running and configuring two projects added setup and maintenance time. Klank owns a dedicated memory module that runs in-process, with a small service contract for custom integrations.
+The original external vector-store setup worked well for memory, but running and configuring two projects added setup and maintenance time. Sprocket owns a dedicated memory module that runs in-process, with a small service contract for custom integrations.
 
-The goal is a single Klank setup with persistent, useful recall. Preserve what works about current memory before introducing more sophisticated memory behavior.
+The goal is a single Sprocket setup with persistent, useful recall. Preserve what works about current memory before introducing more sophisticated memory behavior.
 
 ## Current integration
 
@@ -14,12 +14,12 @@ The goal is a single Klank setup with persistent, useful recall. Preserve what w
 - `memory/service.py` defines the memory domain types and the service contract used directly by the engine.
 - `memory/sqlite.py` implements the built-in backend; `memory/markdown.py` adds optional directory synchronization.
 - `memory/config.py` selects the built-in `local` service or a registered custom factory; `none` disables memory.
-- `application/cli.py` owns backend selection and startup wiring; the root `klank.py` is a thin launcher that uses `runpy` to execute `application.cli`. Memory currently defaults to disabled.
+- `application/cli.py` owns backend selection and startup wiring; the root `sprocket.py` is a thin launcher that uses `runpy` to execute `application.cli`. Memory currently defaults to disabled.
 - Embedding providers are configured independently under `embeddings/`; the local backend returns explicitly labeled squared-L2 distances.
 
 ## Recommended first release
 
-1. Persistent memory inside Klank, with no external vector-store checkout or server required.
+1. Persistent memory inside Sprocket, with no external vector-store checkout or server required.
 2. A shared application SQLite database, with a memory table and corresponding vector virtual table using the `sqlite-vss` pattern. Memory is one consumer of application storage, not the owner of a memory-only database.
 3. A standalone `embeddings/` adapter module, patterned after `llms/`. Start with OpenAI using the existing SDK; providers remain independent of chat-model selection and memory storage.
 4. Existing semantic/episodic memory types, importance levels, explicit `memory.add` tool, and recall before inference.
@@ -111,7 +111,7 @@ Persistence/search should work without a chat LLM instance. Tools may be exposed
 
 ## Persistence and operational behavior
 
-SQLite is the application source of truth under an ignored data directory, for example `datastore/klank.sqlite3`. A shared storage module owns connection policy and schema migrations; memory owns its tables and queries. Other modules can add tables through the same migration mechanism. Markdown is an optional editable, synchronized view for directory-based inspection and editing.
+SQLite is the application source of truth under an ignored data directory, for example `datastore/sprocket.sqlite3`. A shared storage module owns connection policy and schema migrations; memory owns its tables and queries. Other modules can add tables through the same migration mechanism. Markdown is an optional editable, synchronized view for directory-based inspection and editing.
 
 ### Markdown synchronization
 
@@ -172,7 +172,7 @@ Memory configuration options are exposed in `config.toml` and through environmen
 
 ```dotenv
 MEMORY_BACKEND=local                 # local | none | registered custom backend
-DATABASE_PATH=datastore/klank.sqlite3
+DATABASE_PATH=datastore/sprocket.sqlite3
 MEMORY_DIRECTORY=memories
 MEMORY_NAMESPACE=default
 EMBEDDING_PROVIDER=openai
@@ -216,7 +216,7 @@ Done when storage operates independently of the agent, with no live embedding AP
 - Preserve the add tool and recall timing; add bounded formatting and instance-owned state.
 - Verify disabled startup, empty/failed recall clearing, configuration/provider failures, and use from the actual agent thread.
 
-Done when a fresh Klank setup can add a memory, restart, and recall it without a second service.
+Done when a fresh Sprocket setup can add a memory, restart, and recall it without a second service.
 
 ### 4. Document and establish the pattern
 

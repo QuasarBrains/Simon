@@ -14,12 +14,10 @@ class Database:
     @staticmethod
     def default_path() -> str:
         directory = Path(__file__).resolve().parent.parent / "datastore"
-        if (
-            not (directory / "klank.sqlite3").exists()
-            and (directory / "simon.sqlite3").is_file()
-        ):
-            return "datastore/simon.sqlite3"
-        return "datastore/klank.sqlite3"
+        for name in ("sprocket.sqlite3", "klank.sqlite3", "simon.sqlite3"):
+            if (directory / name).is_file():
+                return f"datastore/{name}"
+        return "datastore/sprocket.sqlite3"
 
     @classmethod
     def from_config(cls, config: Mapping[str, str]) -> "Database":

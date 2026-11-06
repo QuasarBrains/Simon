@@ -17,7 +17,7 @@ class ConfigurationError(ValueError):
 
 
 class AppSettings(Settings):
-    log_directory: str = Field(default="klank-logs", min_length=1)
+    log_directory: str = Field(default="sprocket-logs", min_length=1)
     verbose: bool = False
     silence_actions: bool = False
 

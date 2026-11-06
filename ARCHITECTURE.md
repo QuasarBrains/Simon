@@ -1,6 +1,6 @@
-# Klank's Architecture & Development
+# Sprocket's Architecture & Development
 
-Klank's architecture diverges from many modern harnesses in that it treats the agent's context as primary, with a "perception" that acts like a stage for anything that might be useful for the agent to solve its task. This is detailed below. The codebase as a whole is designed to be approachable, maintainable, and simple. This means that in some cases functionality will be sacrificed in the interest of keeping the codebase lightweight and general-purpose. Highly specific or complex functionality is the domain of forks that build off of the baseline. However, the core will evolve over time with improvements to quality and architecture, to make it more useful for those looking to extend Klank's functionality. The goal is that a human should be able to put the entire codebase in their own head, ideally in a weekend or shorter if they wanted to.
+Sprocket's architecture diverges from many modern harnesses in that it treats the agent's context as primary, with a "perception" that acts like a stage for anything that might be useful for the agent to solve its task. This is detailed below. The codebase as a whole is designed to be approachable, maintainable, and simple. This means that in some cases functionality will be sacrificed in the interest of keeping the codebase lightweight and general-purpose. Highly specific or complex functionality is the domain of forks that build off of the baseline. However, the core will evolve over time with improvements to quality and architecture, to make it more useful for those looking to extend Sprocket's functionality. The goal is that a human should be able to put the entire codebase in their own head, ideally in a weekend or shorter if they wanted to.
 
 ## Application Interface
 
@@ -13,7 +13,7 @@ After that, we'll also be exploring adding a REST API around the new backend, al
 
 ## The Agent Loop
 
-The overall direction of the project is to provide a metacognitive shell around the core reasoning engine, the LLM. This isn't to pretend that an LLM is like a person in the way it thinks, but rather to allow optimal context engineering through treating the Perception layer as a stage. Accordingly, Klank is designed as a loop with three abstracted phases for each "beat" of the agent's run:
+The overall direction of the project is to provide a metacognitive shell around the core reasoning engine, the LLM. This isn't to pretend that an LLM is like a person in the way it thinks, but rather to allow optimal context engineering through treating the Perception layer as a stage. Accordingly, Sprocket is designed as a loop with three abstracted phases for each "beat" of the agent's run:
 
 First, **Perception** is the context layer, which determines everything the model sees about its environment: memory, workspace state, and the results of its own actions. The goal of this module is to have fine-grained control at every beat of the PRA loop as to what enters the model's context window, and therefore has influence on the reasoning process. Sub-modules of perception include:
 
@@ -69,9 +69,9 @@ The organization separates agent behavior from application wiring:
 
 - `agent/` handles lifecycle and control. The perception → inference → action loop, environment updates, waiting/resuming, and tool orchestration. `agent/tokens.py` keeps a trailing context window within configured model/input boundaries without compaction; see [context and cost policies](documentation/llm-adapters.md).
 - `workbenches/` is for session-local mini-applications for the agent to use in its work. See [Adding a workbench](documentation/adding-a-workbench.md).
-- `memory/` is a built-in durable memory module that uses SQLite with `sqlite-vss` to bring a semantic memory system directly into Klank. `memory/engine.py` handles recall, prompt formatting, and memory tools; service contracts and backends live alongside it. See [Adding memory](documentation/adding-memory.md) for more details.
+- `memory/` is a built-in durable memory module that uses SQLite with `sqlite-vss` to bring a semantic memory system directly into Sprocket. `memory/engine.py` handles recall, prompt formatting, and memory tools; service contracts and backends live alongside it. See [Adding memory](documentation/adding-memory.md) for more details.
 - `roles/` defines role identities, prompt guidance, and tool selections. `tools/` defines shared tool contracts, registration, execution policies, and capability libraries.
-- `application/` assembles the runtime and owns its CLI-facing concerns and shared event transport (`application/events.py`). `application/cli.py` contains the existing CLI implementation and runtime wiring; the root `klank.py` is a thin launcher that uses `runpy` to execute `application.cli`. `application/config.py` loads configuration; `application/terminal.py`, `application/cli_input.py`, and `application/runlog.py` provide presentation, interactive input/approval, and session logging.
+- `application/` assembles the runtime and owns its CLI-facing concerns and shared event transport (`application/events.py`). `application/cli.py` contains the existing CLI implementation and runtime wiring; the root `sprocket.py` is a thin launcher that uses `runpy` to execute `application.cli`. `application/config.py` loads configuration; `application/terminal.py`, `application/cli_input.py`, and `application/runlog.py` provide presentation, interactive input/approval, and session logging.
 - `llms/`, `embeddings/`, and `storage/` remain unchanged: chat-provider adapters, independent embedding adapters, and shared database lifecycle/migrations, respectively.
 
 ## Memory Control

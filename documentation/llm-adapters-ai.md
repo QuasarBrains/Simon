@@ -155,7 +155,7 @@ and configuration setting instead of only saying "Incomplete function call".
 
 ## Logs and troubleshooting
 
-`app.log_directory` defaults to `klank-logs`. The CLI prints its resolved
+`app.log_directory` defaults to `sprocket-logs`. The CLI prints its resolved
 path at startup. Logs append across launches; `--clear-logs` is the explicit opt-in
 to truncate application log files. Existing flat files remain readable.
 

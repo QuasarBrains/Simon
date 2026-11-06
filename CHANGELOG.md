@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to Klank, starting with [PR #6](https://github.com/QuasarBrains/Simon/pull/6). Earlier history is not backfilled.
+Notable changes to Sprocket, starting with [PR #6](https://github.com/QuasarBrains/Simon/pull/6). Earlier history is not backfilled.
 
 Earlier versions were experimental alpha work. The next planned release is 1.0.0:
 a renewed foundation for building and customizing agents, as coding models become

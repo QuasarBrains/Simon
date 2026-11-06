@@ -1,5 +1,5 @@
 [project]
-name = "klank"
+name = "sprocket"
 version = "1.0.0"
 description = "An experimental command-line LLM agent with roles, tools, and optional memory."
 readme = "Readme.md"
@@ -15,6 +15,7 @@ dependencies = [
     "python-frontmatter==1.1.0",
     "requests==2.32.3",
     "rich==13.7.1",
+    "textual>=0.80,<2",
     "prompt-toolkit==3.0.53",
     "selenium==4.24.0",
     "tiktoken==0.7.0",

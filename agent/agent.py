@@ -7,7 +7,6 @@ from typing import List, Optional
 from agent.environment import Environment
 from agent.tokens import TokenControl
 from application.events import PubSub
-from application.terminal import console, terminal
 from llms.costs import BudgetExceeded, PricingUnavailable
 from llms.llm import LLM, LLMError, Message
 from memory.engine import MemoryEngine
@@ -185,7 +184,8 @@ class Agent:
                 {"removed_messages": removed, "retained_messages": len(window)},
             )
 
-        with terminal.thinking():
+        self.pubsub.publish("agent.thinking", {"active": True})
+        try:
             task_ids = [
                 task_id
                 for workbench in self.workbenches
@@ -195,6 +195,8 @@ class Agent:
             response_message = self.llm.get_response(
                 self.messages, tools, task_id=task_id
             )
+        finally:
+            self.pubsub.publish("agent.thinking", {"active": False})
 
         self.messages.append(response_message)
 
@@ -229,11 +231,6 @@ class Agent:
                 self.log(
                     f"Running {tool_call.name} with arguments: {tool_call.arguments}"
                 )
-            if not self.silence_actions and (
-                self.verbose or not tool_call.name.startswith("interaction.")
-            ):
-                console.print(f"  ↳ {tool_call.name}", style="dim", markup=False)
-
             self.pubsub.publish(
                 "tool.started", {"call_id": tool_call.id, "name": tool_call.name}
             )
